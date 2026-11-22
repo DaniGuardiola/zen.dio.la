@@ -10,7 +10,7 @@ import { backfill, rememberOld } from "./backfill.ts";
 import { Monk, MODELS, DEFAULT_MODEL, claudeCli, type MonkEvent } from "./monk.ts";
 import { load, reset, rewind, type Sitting } from "./state.ts";
 import { DEFAULT_VOICE, Voice, stopSidecar, voices } from "./voice.ts";
-import { readiness, voiceGone } from "./prepare.ts";
+import { readiness, stopFetch, voiceGone } from "./prepare.ts";
 import pkg from "../package.json" with { type: "json" };
 
 const PORT = Number(process.env.ZEN_PORT ?? 47470);
@@ -241,10 +241,11 @@ const server = Bun.serve<Conn>({
 });
 
 console.log(`zen companion ${pkg.version} on http://127.0.0.1:${server.port}`);
-process.on("SIGINT", () => (stopSidecar(), process.exit(0)));
+const bye = () => (stopSidecar(), stopFetch(), process.exit(0));
+process.on("SIGINT", bye);
 // Run by zen.app: if the app goes away (quit, crash, killed), go with it.
 if (INSTALL === "app")
   setInterval(() => {
-    if (process.ppid === 1) stopSidecar(), process.exit(0);
+    if (process.ppid === 1) bye();
   }, 2000);
-process.on("SIGTERM", () => (stopSidecar(), process.exit(0)));
+process.on("SIGTERM", bye);

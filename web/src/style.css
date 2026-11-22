@@ -240,6 +240,17 @@ button {
   gap: 1rem;
 }
 
+#gate-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+#gate-body > p {
+  margin: 0;
+}
+
 #gate .lead {
   font-size: 1.6rem;
   font-weight: 300;
@@ -746,7 +757,7 @@ body.voice #say:focus-within #words::placeholder {
   height: 1px;
   background: var(--faint);
   overflow: hidden;
-  margin-top: -0.4rem;
+  margin-top: -0.3rem;
 }
 
 #pf-bar i {

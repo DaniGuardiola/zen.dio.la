@@ -12,6 +12,10 @@ import sys
 import threading
 import time
 
+# Plain HTTP downloads: they resume where they stopped. (Hugging Face's xet transfer was
+# much slower on some networks, stalled, and its partial files can't be resumed.)
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 from huggingface_hub import HfApi, hf_hub_download, snapshot_download
 from huggingface_hub.constants import HF_HUB_CACHE
 
@@ -50,16 +54,6 @@ def blob_bytes(repo: str) -> int:
     return sum(sizes.values())
 
 
-def clear_partials(repos):
-    """An interrupted download leaves partial files that are never resumed; drop them."""
-    for repo in repos:
-        d = blobs(repo)
-        if os.path.isdir(d):
-            for e in os.scandir(d):
-                if e.name.endswith(".incomplete"):
-                    os.remove(e.path)
-
-
 def main():
     if cached():
         return say({"ok": True})
@@ -71,12 +65,19 @@ def main():
         info = api.model_info(repo, files_metadata=True)
         sizes[repo] = next(s.size or 0 for s in info.siblings if s.rfilename == name)
     total = sum(sizes.values())
-    clear_partials(sizes)
     stop = threading.Event()
 
     def report():
+        last, moved = -1, time.monotonic()
         while not stop.wait(0.5):
-            say({"done": sum(min(blob_bytes(r), sizes[r]) for r in sizes), "total": total})
+            done = sum(min(blob_bytes(r), sizes[r]) for r in sizes)
+            say({"done": done, "total": total})
+            if done != last:
+                last, moved = done, time.monotonic()
+            elif time.monotonic() - moved > 90:
+                # Stuck: stop; the companion starts again and it resumes from here.
+                say({"ok": False, "error": "the download stalled", "stalled": True})
+                os._exit(3)
 
     threading.Thread(target=report, daemon=True).start()
     for attempt in range(3):  # flaky networks: resume where it left off

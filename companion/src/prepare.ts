@@ -75,18 +75,21 @@ function refreshMonk() {
 
 let voice: Step = { state: "checking" };
 let voiceRun: Promise<void> | undefined;
+let fetcher: ReturnType<typeof Bun.spawn> | undefined;
 
-async function prepareVoice() {
-  voice = { state: "working", message: "getting ready" };
-  const py = await python((s) => (voice = { state: "working", message: s === "installing" ? "installing (a minute or two, first time only)" : s }));
-  // Models: quick when they're already here; the first time, about 5 GB with progress.
-  voice = { state: "working", message: "checking the voice models" };
-  const fetch = Bun.spawn([py, join(speechDir, "fetch.py")], {
+/** Stop any download in progress (the companion is going away). */
+export function stopFetch() {
+  fetcher?.kill();
+}
+
+/** Run speech/fetch.py, showing its progress; resolves with its last word. */
+async function fetchModels(py: string): Promise<{ ok?: boolean; error?: string; stalled?: boolean }> {
+  const fetch = (fetcher = Bun.spawn([py, join(speechDir, "fetch.py")], {
     env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), HF_HUB_DISABLE_PROGRESS_BARS: "1" },
     stdout: "pipe",
     stderr: "inherit",
-  });
-  let result: { ok?: boolean; error?: string } = {};
+  }));
+  let result: { ok?: boolean; error?: string; stalled?: boolean } = {};
   let buf = "";
   for await (const chunk of fetch.stdout) {
     buf += new TextDecoder().decode(chunk);
@@ -102,7 +105,24 @@ async function prepareVoice() {
     }
   }
   await fetch.exited;
-  if (!result.ok) throw new Error(`couldn't download the voice: ${result.error ?? "it stopped"}. Check your connection and try again; what already arrived is kept.`);
+  fetcher = undefined;
+  return result;
+}
+
+async function prepareVoice() {
+  voice = { state: "working", message: "getting ready" };
+  const py = await python((s) => (voice = { state: "working", message: s === "installing" ? "installing (a minute or two, first time only)" : s }));
+  // Models: quick when they're already here; the first time, about 5 GB with progress.
+  // A stalled or dropped download starts again and resumes where it was.
+  voice = { state: "working", message: "checking the voice models" };
+  let result: { ok?: boolean; error?: string; stalled?: boolean } = {};
+  for (let attempt = 0; attempt < 5; attempt++) {
+    result = await fetchModels(py);
+    if (result.ok) break;
+    log(`download attempt ${attempt + 1}: ${result.error}`);
+    await Bun.sleep(2000);
+  }
+  if (!result.ok) throw new Error(`couldn't download the voice (${result.error ?? "it stopped"}). Check your connection and try again; what already arrived is kept.`);
   voice = { state: "working", message: "waking the voice" };
   await ensureSidecar();
   voice = { state: "ready" };

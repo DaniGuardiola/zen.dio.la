@@ -73,7 +73,7 @@ export async function ensureSidecar(status: (s: string) => void = () => {}): Pro
     lastErr = "";
     child = spawn(py, [join(SPEECH_DIR, "server.py")], {
       stdio: ["ignore", "inherit", "pipe"],
-      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), ZEN_DATA_DIR: DATA_DIR, TOKENIZERS_PARALLELISM: "false", HF_HUB_DISABLE_PROGRESS_BARS: "1" },
+      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), ZEN_DATA_DIR: DATA_DIR, TOKENIZERS_PARALLELISM: "false", HF_HUB_DISABLE_PROGRESS_BARS: "1", HF_HUB_DISABLE_XET: "1" },
     });
     child.stderr?.on("data", (d: Buffer) => {
       process.stderr.write(d);
