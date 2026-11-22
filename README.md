@@ -23,6 +23,16 @@ brew install daniguardiola/tap/zen
 brew services start daniguardiola/tap/zen
 ```
 
+The page finds zen by itself once it runs, then gets everything ready on a dark screen
+before you sit: it checks Claude is signed in, installs the voice and downloads its models
+(about 4.7 GB, first time only, with progress), wakes it, and asks for the microphone.
+Then: **sit**. Options (speak or write, model, voice) wait behind "customize".
+
+**Saving a sitting.** "save this sitting" (in the ··· panel) writes a `.zen` file with the
+conversation, the lights, and the monk's memory of it. Open it again from the ··· panel or
+"customize", or drop it anywhere on the page, to carry on later or on another Mac. The
+sitting it replaces is kept in `~/Library/Application Support/zen/backups/`.
+
 ## Run it (development)
 
 ```sh

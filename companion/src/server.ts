@@ -11,6 +11,7 @@ import { Monk, MODELS, DEFAULT_MODEL, claudeCli, type MonkEvent } from "./monk.t
 import { load, reset, rewind, type Sitting } from "./state.ts";
 import { DEFAULT_VOICE, Voice, stopSidecar, voices } from "./voice.ts";
 import { readiness, stopFetch, voiceGone } from "./prepare.ts";
+import { exportSitting, importSitting } from "./transfer.ts";
 import pkg from "../package.json" with { type: "json" };
 
 const PORT = Number(process.env.ZEN_PORT ?? 47470);
@@ -29,10 +30,15 @@ const cors = (origin: string | null): Record<string, string> =>
     ? {
         "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Methods": "GET, POST",
+        "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Allow-Private-Network": "true",
         Vary: "Origin",
       }
     : {};
+
+/** From one of our pages? (Same-origin GETs carry no Origin, but do say they're same-origin.) */
+const ours = (req: Request, origin: string | null) =>
+  origin ? ALLOWED.includes(origin) : req.headers.get("sec-fetch-site") === "same-origin";
 
 type Conn = { model: string; voiceId: string; monk?: Monk; voice?: Voice; heard?: string; muteTurn?: number; flushed?: number; chain: Promise<unknown> };
 type WS = ServerWebSocket<Conn>;
@@ -117,9 +123,7 @@ const server = Bun.serve<Conn>({
 
     // What the room still needs (Claude Code, the voice); getting it ready is started here.
     if (url.pathname === "/ready") {
-      // Our pages only (same-origin GETs carry no Origin, but do say they're same-origin).
-      const ours = origin ? ALLOWED.includes(origin) : req.headers.get("sec-fetch-site") === "same-origin";
-      if (!ours) return new Response("forbidden", { status: 403 });
+      if (!ours(req, origin)) return new Response("forbidden", { status: 403 });
       return Response.json(readiness(url.searchParams.get("voice") === "1", url.searchParams.get("retry") === "1"), { headers: cors(origin) });
     }
 
@@ -131,6 +135,32 @@ const server = Bun.serve<Conn>({
       const wantedVoice = url.searchParams.get("voice") ?? "";
       const voiceId = voices().some((v) => v.id === wantedVoice) ? wantedVoice : DEFAULT_VOICE;
       return srv.upgrade(req, { data: { model, voiceId, chain: Promise.resolve() } }) ? undefined : new Response("upgrade failed", { status: 400 });
+    }
+
+    // Save the sitting to a file / open a saved one (the page offers both, and drag and drop).
+    if (url.pathname === "/export") {
+      if (!ours(req, origin)) return new Response("forbidden", { status: 403 });
+      return Response.json(exportSitting(sitting), { headers: cors(origin) });
+    }
+
+    if (url.pathname === "/import" && req.method === "POST") {
+      if (!ours(req, origin)) return new Response("forbidden", { status: 403 });
+      try {
+        const next = importSitting(await req.json(), sitting);
+        if (active) {
+          active.data.monk?.close();
+          active.data.monk = undefined;
+          active.data.voice?.cancel();
+        }
+        sitting = next;
+        if (active) {
+          hello(active);
+          startMonk(active);
+        }
+        return Response.json({ ok: true, lines: sitting.transcript.length }, { headers: cors(origin) });
+      } catch (e) {
+        return Response.json({ ok: false, error: (e as Error).message }, { status: 400, headers: cors(origin) });
+      }
     }
 
     if (url.pathname === "/reset" && req.method === "POST") {

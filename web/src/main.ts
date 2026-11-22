@@ -5,7 +5,7 @@ import { mountControls } from "./controls.ts";
 
 /** Companion versions this page can talk to, and the newest one released. */
 const MIN_COMPANION = "0.1.0";
-const LATEST_COMPANION = "0.4.0";
+const LATEST_COMPANION = "0.4.1";
 const DMG = "https://github.com/DaniGuardiola/zen.dio.la/releases/latest/download/zen.dmg";
 // Served by a companion itself (any loopback port, except the Vite dev server)?
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && location.port !== "5173";
@@ -218,8 +218,12 @@ function preflight(h: Health) {
       </fieldset>
       ${models.length ? `<fieldset><legend>with</legend>${models.map((m) => choice("model", m.id, m.name, m.note, m.id === prefs.model)).join("")}</fieldset>` : ""}
       ${voices.length > 1 ? `<fieldset id="voice-choice" ${prefs.mode === "speak" ? "" : "hidden"}><legend>hearing</legend>${voices.map((v) => choice("voice", v.id, v.name, v.note, v.id === prefs.voice)).join("")}</fieldset>` : ""}
-      ${h.sitting?.lines ? `<button type="button" class="quiet" id="begin-again">begin again</button>` : ""}
+      <div class="prep-actions">
+        <button type="button" class="quiet" id="pf-open">open a saved sitting</button>
+        ${h.sitting?.lines ? `<button type="button" class="quiet" id="begin-again">begin again</button>` : ""}
+      </div>
     </form>`);
+  $("pf-open").onclick = () => pickSitting();
 
   let mic: Step | undefined;
   const askMic = () => {
@@ -689,14 +693,105 @@ function renderLog() {
     logEl.hidden = true;
     send({ type: "reset" });
   });
+  const keep = document.createElement("button");
+  keep.textContent = "save this sitting";
+  keep.onclick = () => saveSitting();
+  const open = document.createElement("button");
+  open.textContent = "open a saved sitting";
+  open.onclick = () => pickSitting();
   const change = document.createElement("button");
   change.textContent = "change how you sit";
   change.onclick = () => {
     logEl.hidden = true;
     leave();
   };
-  linesEl.append(change, reset);
+  linesEl.append(keep, open, change, reset);
 }
+
+// --- saving and opening sittings ---------------------------------------------------
+// A sitting saves to a .zen file (the conversation, the lights, and the monk's memory of
+// it) to continue later or on another Mac. Open one from the ··· panel, from "customize",
+// or by dropping the file anywhere on the page.
+
+function toast(text: string) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = text;
+  document.body.append(t);
+  setTimeout(() => t.classList.add("gone"), 3500);
+  setTimeout(() => t.remove(), 5000);
+}
+
+async function saveSitting() {
+  try {
+    const r = await fetch(`${COMPANION}/export`, { targetAddressSpace: "loopback" } as RequestInit);
+    if (!r.ok) throw new Error(String(r.status));
+    const blob = new Blob([await r.text()], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `zen sitting ${new Date().toISOString().slice(0, 10)}.zen`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    toast("saved. open it again any time to carry on.");
+  } catch (e) {
+    toast(`couldn't save the sitting (${(e as Error).message})`);
+  }
+}
+
+function pickSitting() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".zen,application/json";
+  input.onchange = () => input.files?.[0] && openSitting(input.files[0]);
+  input.click();
+}
+
+async function openSitting(file: File) {
+  let data: unknown;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    return toast("that file isn't a saved sitting");
+  }
+  try {
+    const r = await fetch(`${COMPANION}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+      targetAddressSpace: "loopback",
+    } as RequestInit);
+    const res = (await r.json()) as { ok: boolean; error?: string };
+    if (!res.ok) return toast(res.error ?? "couldn't open that sitting");
+    logEl.hidden = true;
+    document.body.classList.remove("silence");
+    toast("the sitting is back. carry on where you left off.");
+    // In the room, the companion sends the sitting over; before it, show "return".
+    if ($("room").hidden) enter();
+  } catch (e) {
+    toast(`couldn't open the sitting (${(e as Error).message})`);
+  }
+}
+
+// Drop a saved sitting anywhere.
+let drags = 0;
+const hasFile = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
+addEventListener("dragenter", (e) => {
+  if (!hasFile(e)) return;
+  e.preventDefault();
+  if (drags++ === 0) document.body.classList.add("dropping");
+});
+addEventListener("dragover", (e) => hasFile(e) && e.preventDefault());
+addEventListener("dragleave", () => {
+  if (--drags <= 0) (drags = 0), document.body.classList.remove("dropping");
+});
+addEventListener("drop", (e) => {
+  if (!hasFile(e)) return;
+  e.preventDefault();
+  drags = 0;
+  document.body.classList.remove("dropping");
+  const f = e.dataTransfer?.files[0];
+  if (f) openSitting(f);
+});
 
 addEventListener("keydown", (e) => {
   if (e.key === "Escape") logEl.hidden = true;
