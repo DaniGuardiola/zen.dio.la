@@ -106,8 +106,11 @@ export class Sky {
   }
 
   private place([x, y]: [number, number]): [number, number] {
-    const span = Math.min(this.w * 0.42, this.h * 0.5);
-    return [this.w / 2 + x * span, this.h * (0.42 - y * 0.34)];
+    // The sky lives above the monk's words; on short windows that band is narrow.
+    const short = this.h <= 640;
+    const [bottom, height] = short ? [0.145, 0.12] : [0.33, 0.27];
+    const span = Math.min(this.w * 0.42, this.h * (short ? 0.3 : 0.45));
+    return [this.w / 2 + x * span, this.h * (bottom - y * height)];
   }
 
   private frame = () => {
@@ -138,8 +141,8 @@ export class Sky {
     // Where each star is drawn: its place, drifting onto a circle at the end.
     const lit = [...this.stars.values()].filter((s) => s.target === 1);
     const pos = new Map<string, [number, number]>();
-    const R = Math.min(w, h) * 0.18;
-    const [cx, cy] = [w / 2, h * 0.28];
+    const R = Math.min(w, h) * (h <= 640 ? 0.07 : 0.14);
+    const [cx, cy] = [w / 2, h * (h <= 640 ? 0.09 : 0.22)];
     lit.forEach((s, i) => {
       const [px, py] = this.place(s.pos);
       // Ensō: the circle is left open, like a brush stroke.
