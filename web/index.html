@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050506" />
+    <title>zen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="sky"></canvas>
+
+    <main id="room" hidden>
+      <div id="monk" aria-live="polite"></div>
+      <div id="you"></div>
+      <form id="say" autocomplete="off">
+        <input id="words" aria-label="speak" spellcheck="false" />
+      </form>
+      <button id="mic" type="button" aria-label="voice" title="voice"><span></span></button>
+      <button id="log-toggle" type="button" title="what was said">···</button>
+      <aside id="log" hidden>
+        <div id="controls"></div>
+        <div id="lines"></div>
+      </aside>
+    </main>
+
+    <section id="gate" hidden>
+      <p class="lead">the room is dark.</p>
+      <div id="gate-body"></div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

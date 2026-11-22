@@ -1,0 +1,8 @@
+kokoro>=0.9.4
+transcribe-cpp==0.4.2
+transcribe-cpp-native==0.4.2
+huggingface_hub
+numpy
+soundfile
+websockets>=15
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

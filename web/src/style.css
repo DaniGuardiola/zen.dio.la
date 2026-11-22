@@ -1,0 +1,452 @@
+:root {
+  --bg: #050506;
+  --ink: #e9e4d8;
+  --dim: rgba(233, 228, 216, 0.38);
+  --faint: rgba(233, 228, 216, 0.14);
+  --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#sky {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#room {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 16px 12vh;
+  pointer-events: none;
+}
+
+#monk {
+  max-width: 34rem;
+  font-size: clamp(1.25rem, 2.6vw, 1.65rem);
+  font-weight: 300;
+  line-height: 1.5;
+  text-align: center;
+  min-height: 3em;
+  text-wrap: pretty;
+  transition: opacity 1.2s ease;
+}
+
+#monk .w {
+  opacity: 0;
+}
+
+#monk .w.on {
+  opacity: 1;
+  transition: opacity 0.25s ease-out;
+}
+
+#you {
+  margin-top: 1.6rem;
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--dim);
+  min-height: 1.6em;
+  max-width: 32rem;
+  text-align: center;
+  transition: opacity 2s ease;
+}
+
+#say {
+  margin-top: 1.2rem;
+  width: min(32rem, 100%);
+  pointer-events: auto;
+}
+
+#words {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--faint);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.1rem;
+  text-align: center;
+  padding: 0.5rem 0;
+  outline: none;
+  caret-color: var(--dim);
+  transition: border-color 0.6s;
+}
+
+#words:focus {
+  border-bottom-color: var(--dim);
+}
+
+#words::placeholder {
+  color: var(--faint);
+}
+
+button {
+  font: inherit;
+  color: var(--dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#mic {
+  margin-top: 1.4rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+}
+
+#mic span {
+  display: block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  border: 1px solid var(--dim);
+  transition: transform 0.08s linear, background 0.6s, border-color 0.6s;
+}
+
+#mic[data-state="on"] span {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+#mic[data-state="loading"] span {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+#log-toggle {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  padding: 0.4rem 0.6rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+  transition: color 0.4s;
+  z-index: 2; /* stays clickable over the open panel, to close it */
+}
+
+#log-toggle:hover {
+  color: var(--ink);
+}
+
+#log {
+  z-index: 1;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(26rem, 100%);
+  padding: 3rem 1.5rem;
+  overflow-y: auto;
+  background: rgba(5, 5, 6, 0.92);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+
+#log p {
+  margin: 0 0 1rem;
+}
+
+#log .you {
+  color: var(--dim);
+  font-style: italic;
+}
+
+#gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  gap: 1rem;
+}
+
+#gate .lead {
+  font-size: 1.6rem;
+  font-weight: 300;
+  margin: 0;
+}
+
+#gate p,
+#gate li {
+  color: var(--dim);
+  max-width: 30rem;
+  line-height: 1.5;
+}
+
+#gate code {
+  display: block;
+  margin: 0.6rem auto;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--ink);
+  user-select: all;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  text-align: left;
+}
+
+#gate button.primary {
+  border: 1px solid var(--dim);
+  color: var(--ink);
+  padding: 0.5rem 1.4rem;
+  border-radius: 999px;
+  margin-top: 0.6rem;
+}
+
+body.silence #room {
+  opacity: 0;
+  transition: opacity 12s ease 4s;
+}
+
+#setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.6rem;
+}
+
+#setup fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 1.4rem;
+}
+
+#setup legend {
+  width: 100%;
+  margin-bottom: 0.6rem;
+  color: var(--dim);
+  font-style: italic;
+  text-align: center;
+}
+
+.opt {
+  cursor: pointer;
+  text-align: center;
+}
+
+.opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.opt span {
+  display: block;
+  padding: 0.3rem 0.2rem;
+  font-size: 1.2rem;
+  color: var(--dim);
+  border-bottom: 1px solid transparent;
+  transition: color 0.4s, border-color 0.4s;
+}
+
+.opt small {
+  display: block;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--faint);
+  transition: color 0.4s;
+}
+
+.opt input:checked + span {
+  color: var(--ink);
+  border-bottom-color: var(--dim);
+}
+
+.opt input:checked + span small {
+  color: var(--dim);
+}
+
+.opt input:focus-visible + span {
+  outline: 1px dotted var(--dim);
+  outline-offset: 4px;
+}
+
+#log button,
+#setup button.quiet {
+  display: block;
+  margin-top: 0.8rem;
+  padding: 0.35rem 1rem;
+  border: 1px solid var(--faint);
+  border-radius: 999px;
+  color: var(--dim);
+  transition: color 0.4s, border-color 0.4s;
+}
+
+#log button:hover,
+#setup button.quiet:hover {
+  color: var(--ink);
+  border-color: var(--dim);
+}
+
+button.armed {
+  color: var(--ink) !important;
+  border-color: var(--ink) !important;
+}
+
+#setup button.quiet {
+  margin-top: -0.6rem;
+  font-size: 0.95rem;
+}
+
+#gate .note {
+  font-style: italic;
+  font-size: 0.95rem;
+  animation: appear 0.8s ease;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+#log button.return {
+  display: inline-block;
+  margin: 0 0 0 0.6rem;
+  padding: 0.05rem 0.6rem;
+  font-size: 0.8rem;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity 0.3s, color 0.4s, border-color 0.4s;
+}
+
+#log p:hover button.return,
+#log button.return:focus-visible,
+#log button.return.armed {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  #log button.return {
+    opacity: 0.7;
+  }
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: -1.9rem 0 1.6rem;
+  padding: 0 2.6rem 1rem 0; /* clear of the ··· button */
+  border-bottom: 1px solid var(--faint);
+}
+
+#log button.ctl {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  color: var(--dim);
+}
+
+#log button.ctl:hover {
+  color: var(--ink);
+}
+
+#log button.ctl[aria-pressed="false"] {
+  color: var(--faint);
+}
+
+#log button.ctl[aria-pressed="false"]:hover {
+  color: var(--dim);
+}
+
+#controls .vol {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 0.2rem;
+  margin-right: 0.6rem;
+}
+
+#c-volume {
+  flex: 1;
+  min-width: 4rem;
+  height: 2rem;
+  background: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+#c-volume::-webkit-slider-runnable-track {
+  height: 1px;
+  background: linear-gradient(to right, var(--dim) var(--fill, 90%), var(--faint) var(--fill, 90%));
+}
+
+#c-volume::-moz-range-track {
+  height: 1px;
+  background: var(--faint);
+}
+
+#c-volume::-moz-range-progress {
+  height: 1px;
+  background: var(--dim);
+}
+
+#c-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+#c-volume::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+}
