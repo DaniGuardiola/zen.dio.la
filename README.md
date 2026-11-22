@@ -50,7 +50,7 @@ Vite dev server origin.
 | `companion/src/monk.ts` | Claude Agent SDK session (streaming input, no built-in tools, game tools over in-process MCP), interruption handling. |
 | `companion/src/voice.ts` | Turn-taking: duck on speech start, barge-in on real words, echo rejection, grace window, sentence-chunked TTS. |
 | `companion/src/server.ts` | Loopback HTTP + WebSocket, origin allowlist, `/health`, `/update`, serves the page. |
-| `speech/server.py` | Local STT (NVIDIA Parakeet Unified EN 0.6B streaming via transcribe.cpp on Metal, Silero VAD for start/stop) + TTS (Breeze TTS 2 on MLX: every sentence is cloned from a short clip in `speech/voice/` (`voices.json` lists them: the elder, designed once from a description, and Alan Watts); word timings from the Qwen3 forced aligner). |
+| `speech/server.py` | Local STT (NVIDIA Parakeet Unified EN 0.6B streaming via transcribe.cpp on Metal, Silero VAD for start/stop) + TTS (Breeze TTS 2 on MLX: every sentence is cloned from a short clip in `speech/voice/` (`voices.json` lists them: the elder, designed once from a description, and Watts); word timings from the Qwen3 forced aligner). |
 | `web/` | The page: canvas sky, the monk's words revealed at speaking pace, mic capture, playback that knows which word you heard last. |
 | `packaging/zen.rb`, `scripts/release.sh` | Homebrew formula for `daniguardiola/tap` + signed, notarized release (tarball and `.dmg`). |
 | `macos/` | `zen.app`: a menu bar app that runs the companion (open, open at login, quit), its icon and entitlements. |
