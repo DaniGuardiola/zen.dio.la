@@ -40,10 +40,11 @@ final class App: NSObject, NSApplicationDelegate {
         sigterm = term
 
         start()
-        // First launch ever: say hello by opening the room.
+        // First launch ever: say hello by opening the room, unless a zen page is already
+        // open and waiting for us (it found the companion and carries on by itself).
         if !UserDefaults.standard.bool(forKey: "opened") {
             UserDefaults.standard.set(true, forKey: "opened")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.openSite() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { self.openUnlessWatched() }
         }
     }
 
@@ -122,6 +123,15 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc func openSite() { NSWorkspace.shared.open(siteURL) }
+
+    private func openUnlessWatched() {
+        let url = URL(string: "http://127.0.0.1:\(port)/health")!
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            let watched = body.contains("\"watched\":true")
+            DispatchQueue.main.async { if !watched { self.openSite() } }
+        }.resume()
+    }
 
     private func refreshLogin() {
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off

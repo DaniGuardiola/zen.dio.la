@@ -9,7 +9,6 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { DATA_DIR } from "./state.ts";
 
@@ -28,12 +27,13 @@ type SpeechMsg =
   | { type: "spoken"; id: string };
 
 let child: ChildProcess | undefined;
+let lastErr = ""; // the sidecar's last error line, to say why it stopped
 
 /**
  * Python for the sidecar. A checkout uses speech/.venv; an install builds its own
  * environment with uv the first time voice is used (models download on first start).
  */
-async function python(status: (s: string) => void): Promise<string> {
+export async function python(status: (s: string) => void = () => {}): Promise<string> {
   if (process.env.ZEN_PYTHON) return process.env.ZEN_PYTHON;
   const local = join(SPEECH_DIR, ".venv", "bin", "python");
   if (existsSync(local)) return local;
@@ -41,16 +41,19 @@ async function python(status: (s: string) => void): Promise<string> {
   const py = join(venv, "bin", "python");
   // The marker holds the requirements it was built from; new ones mean a fresh build.
   const want = readFileSync(join(SPEECH_DIR, "requirements.txt"), "utf8");
+  if (!want.trim()) throw new Error("this zen install is missing its voice requirements; reinstall zen");
   const marker = join(venv, ".ready");
   if (existsSync(marker) && readFileSync(marker, "utf8") === want) return py;
   rmSync(venv, { recursive: true, force: true });
   // The app bundles its own uv; Homebrew installs depend on the uv formula.
   const uv = process.env.ZEN_UV ?? Bun.which("uv", { PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` });
   if (!uv) throw new Error("uv is needed for voice: brew install uv");
-  status("installing the voice, first time only");
+  status("installing");
   const run = async (args: string[]) => {
-    const p = Bun.spawn([uv, ...args], { env: { ...process.env, VIRTUAL_ENV: venv }, stdout: "inherit", stderr: "inherit" });
-    if ((await p.exited) !== 0) throw new Error(`uv ${args[0]} failed`);
+    const p = Bun.spawn([uv, ...args], { env: { ...process.env, VIRTUAL_ENV: venv }, stdout: "inherit", stderr: "pipe" });
+    const err = await new Response(p.stderr).text();
+    process.stderr.write(err);
+    if ((await p.exited) !== 0) throw new Error(`could not install the voice (uv ${args[0]}): ${err.trim().split("\n").pop() ?? ""}`);
   };
   await run(["venv", "--quiet", "--allow-existing", "--python", "3.12", venv]);
   await run(["pip", "install", "--quiet", "-r", join(SPEECH_DIR, "requirements.txt")]);
@@ -58,24 +61,32 @@ async function python(status: (s: string) => void): Promise<string> {
   return py;
 }
 
+/** Where the speech code lives (its helpers run from here too). */
+export const speechDir = SPEECH_DIR;
+
+/** Start the speech sidecar (models must already be downloaded, see prepare.ts) and wait until it listens. */
 export async function ensureSidecar(status: (s: string) => void = () => {}): Promise<boolean> {
   if (await reachable()) return true;
   if (!child) {
     const py = await python(status);
-    // The first start downloads the voice and hearing models (about 5 GB).
-    status(firstStart() ? "downloading the voice, about 5 GB, first time only" : "waking the voice");
+    status("waking");
+    lastErr = "";
     child = spawn(py, [join(SPEECH_DIR, "server.py")], {
-      stdio: ["ignore", "pipe", "inherit"],
-      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), ZEN_DATA_DIR: DATA_DIR, TOKENIZERS_PARALLELISM: "false" },
+      stdio: ["ignore", "inherit", "pipe"],
+      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), ZEN_DATA_DIR: DATA_DIR, TOKENIZERS_PARALLELISM: "false", HF_HUB_DISABLE_PROGRESS_BARS: "1" },
+    });
+    child.stderr?.on("data", (d: Buffer) => {
+      process.stderr.write(d);
+      for (const line of d.toString().split("\n")) if (/error|exception|failed/i.test(line)) lastErr = line.trim();
     });
     child.on("exit", () => (child = undefined));
   }
-  for (let i = 0; i < 2 * 60 * 60; i++) {
+  for (let i = 0; i < 10 * 60 * 2; i++) {
     if (await reachable()) return true;
-    if (!child) return false;
+    if (!child) throw new Error(`the voice stopped while waking${lastErr ? `: ${lastErr}` : ""}`);
     await Bun.sleep(500);
   }
-  return false;
+  throw new Error("the voice took too long to wake");
 }
 
 /**
@@ -95,12 +106,6 @@ export function voices(): { id: string; name: string; note: string }[] {
         .filter((id) => !bundled.some((v) => v.id === id))
     : [];
   return [...bundled, ...own.map((id) => ({ id, name: id.replace(/[-_]/g, " "), note: "your own clip" }))];
-}
-
-/** The voice model isn't downloaded yet: this is the first time the voice wakes. */
-function firstStart() {
-  const hub = process.env.HF_HOME ? join(process.env.HF_HOME, "hub") : join(homedir(), ".cache", "huggingface", "hub");
-  return !existsSync(join(hub, "models--mlx-community--Breeze-TTS-2-mlx-4bit"));
 }
 
 async function reachable() {
@@ -150,8 +155,7 @@ export class Voice {
   ) {}
 
   async connect() {
-    if (!(await ensureSidecar((s) => this.toBrowser({ type: "voice", state: "loading", message: s }))))
-      throw new Error("speech sidecar did not start");
+    await ensureSidecar();
     await new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(`ws://127.0.0.1:${SPEECH_PORT}`);
       this.ws.onmessage = (e) => this.onSpeech(JSON.parse(String(e.data)) as SpeechMsg);

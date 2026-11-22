@@ -269,10 +269,41 @@ button {
   text-align: left;
 }
 
-#gate .or {
-  margin: 0.4rem 0 -0.4rem;
-  font-size: 0.9rem;
+#gate .fine {
+  margin: 0;
+  font-size: 0.85rem;
   font-style: italic;
+  opacity: 0.7;
+}
+
+#gate .waiting {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+#gate a.quiet {
+  color: var(--dim);
+  font-size: 0.9rem;
+  text-underline-offset: 3px;
+}
+
+#gate details.brew {
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+
+#gate details.brew summary {
+  cursor: pointer;
+  list-style: none;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+#gate details.brew summary::-webkit-details-marker {
+  display: none;
+}
+
+#gate details.brew[open] summary {
+  opacity: 1;
 }
 
 #gate a.primary {
@@ -366,7 +397,8 @@ body.silence #room {
 }
 
 #log button,
-#setup button.quiet {
+#setup button.quiet,
+.prep-actions button.quiet {
   display: block;
   margin-top: 0.8rem;
   padding: 0.35rem 1rem;
@@ -377,7 +409,8 @@ body.silence #room {
 }
 
 #log button:hover,
-#setup button.quiet:hover {
+#setup button.quiet:hover,
+.prep-actions button.quiet:hover {
   color: var(--ink);
   border-color: var(--dim);
 }
@@ -701,4 +734,67 @@ body.voice #say:focus-within #words::placeholder {
   #mic {
     margin-top: 0.5rem;
   }
+}
+
+/* Preflight: a dark, quiet screen while the room gets ready */
+#pf-status {
+  min-height: 1.4em;
+}
+
+#pf-bar {
+  width: min(16rem, 70vw);
+  height: 1px;
+  background: var(--faint);
+  overflow: hidden;
+  margin-top: -0.4rem;
+}
+
+#pf-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--dim);
+  transition: width 0.7s linear;
+}
+
+#pf-need {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  animation: appear 0.8s ease;
+}
+
+#pf-need p {
+  color: var(--ink);
+  margin: 0;
+}
+
+#gate [hidden],
+#setup[hidden] {
+  display: none !important;
+}
+
+#gate button.link {
+  color: var(--dim);
+  font-size: 0.85rem;
+  font-style: italic;
+  opacity: 0.6;
+  transition: opacity 0.4s;
+}
+
+#gate button.link:hover {
+  opacity: 1;
+}
+
+.prep-actions {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.prep-actions button.quiet {
+  margin-top: 0;
 }

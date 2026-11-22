@@ -10,6 +10,7 @@ import { backfill, rememberOld } from "./backfill.ts";
 import { Monk, MODELS, DEFAULT_MODEL, claudeCli, type MonkEvent } from "./monk.ts";
 import { load, reset, rewind, type Sitting } from "./state.ts";
 import { DEFAULT_VOICE, Voice, stopSidecar, voices } from "./voice.ts";
+import { readiness, voiceGone } from "./prepare.ts";
 import pkg from "../package.json" with { type: "json" };
 
 const PORT = Number(process.env.ZEN_PORT ?? 47470);
@@ -40,6 +41,9 @@ let sitting: Sitting = load();
 await backfill(sitting);
 rememberOld(sitting, claudeCli()); // in the background; the page picks it up on next load
 let active: WS | undefined; // one sitting at a time
+// When a zen page last looked for us (waiting for the install, or getting the room ready).
+// zen.app asks, so it doesn't open a second page on first launch.
+let watchedAt = 0;
 
 function send(ws: WS, msg: object) {
   ws.send(JSON.stringify(msg));
@@ -93,21 +97,31 @@ const server = Bun.serve<Conn>({
     const origin = req.headers.get("origin");
     if (req.method === "OPTIONS") return new Response(null, { headers: cors(origin) });
 
+    if ((url.pathname === "/health" && url.searchParams.has("waiting")) || url.pathname === "/ready") watchedAt = Date.now();
     if (url.pathname === "/health")
       return Response.json(
         {
           app: "zen",
           version: pkg.version,
-          protocol: 1,
+          protocol: 2, // 2: /ready
           models: MODELS,
           defaultModel: DEFAULT_MODEL,
           voices: voices(),
           defaultVoice: DEFAULT_VOICE,
           install: INSTALL,
+          watched: Date.now() - watchedAt < 8000,
           sitting: { lines: sitting.transcript.length, lights: sitting.order.length, silence: sitting.silence },
         },
         { headers: cors(origin) },
       );
+
+    // What the room still needs (Claude Code, the voice); getting it ready is started here.
+    if (url.pathname === "/ready") {
+      // Our pages only (same-origin GETs carry no Origin, but do say they're same-origin).
+      const ours = origin ? ALLOWED.includes(origin) : req.headers.get("sec-fetch-site") === "same-origin";
+      if (!ours) return new Response("forbidden", { status: 403 });
+      return Response.json(readiness(url.searchParams.get("voice") === "1", url.searchParams.get("retry") === "1"), { headers: cors(origin) });
+    }
 
     if (url.pathname === "/ws") {
       // Browsers always send Origin; only our own pages may sit with the monk.
@@ -186,6 +200,7 @@ const server = Bun.serve<Conn>({
               c.voice = v;
               send(ws, { type: "voice", state: "on" });
             } catch (e) {
+              voiceGone();
               send(ws, { type: "voice", state: "error", message: String((e as Error).message) });
             }
           } else if (!m.on && c.voice) {

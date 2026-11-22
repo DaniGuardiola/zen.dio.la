@@ -33,6 +33,8 @@ submit() {
 }
 
 # --- the companion ---------------------------------------------------------------
+# The voice installs from this; an empty one ships a voice that can't start.
+grep -q mlx-audio speech/requirements.txt || { echo "speech/requirements.txt is missing mlx-audio" >&2; exit 1; }
 (cd web && bun run build)
 (cd companion && bun build --compile --minify --target=bun-darwin-arm64 src/server.ts --outfile "../$stage/zen-companion")
 cp -R web/dist "$stage/web"

@@ -51,9 +51,9 @@ type Health = {
   install?: "brew" | "app" | "dev";
   sitting?: { lines: number; lights: number; silence: boolean }; models?: { id: string; name: string; note: string }[]; defaultModel?: string; voices?: { id: string; name: string; note: string }[]; defaultVoice?: string };
 
-async function health(): Promise<Health | undefined> {
+async function health(waiting = false): Promise<Health | undefined> {
   try {
-    const r = await fetch(`${COMPANION}/health`, { targetAddressSpace: "loopback" } as RequestInit);
+    const r = await fetch(`${COMPANION}/health${waiting ? "?waiting=1" : ""}`, { targetAddressSpace: "loopback" } as RequestInit);
     return r.ok ? await r.json() : undefined;
   } catch {
     return undefined;
@@ -75,13 +75,34 @@ function gate(html: string) {
 }
 
 const INSTALL = `
-  <p>zen needs a small companion on your Mac. It runs the monk with Claude, and listens and speaks with voice models that stay on your machine.</p>
-  <a class="primary" href="${DMG}">download zen for Mac</a>
-  <p class="or">or with Homebrew</p>
-  <code>brew install daniguardiola/tap/zen
+  <p>zen needs a small app on your Mac. It uses Claude, and voice models that stay on your machine.</p>
+  <a class="primary" id="download" href="${DMG}">download for Mac</a>
+  <details class="brew">
+    <summary>or use Homebrew</summary>
+    <code>brew install daniguardiola/tap/zen
 brew services start daniguardiola/tap/zen</code>
-  <p>The monk speaks through Claude Code, so you need it installed and signed in (<a href="https://claude.com/claude-code" style="color:inherit">claude.com/claude-code</a>). Apple Silicon only, for now.</p>
-  <button class="primary" id="retry">enter</button>`;
+  </details>
+  <p class="fine">Apple Silicon Macs</p>`;
+
+const OPEN_IT = `
+  <p>Open <b>zen.dmg</b> from your Downloads, drag zen into Applications, and open it.</p>
+  <p class="fine waiting">this page will open by itself once zen is running</p>
+  <a class="quiet" href="${DMG}">download again</a>`;
+
+let watching: number | undefined;
+
+/** No companion yet: offer it, and keep looking so the page opens by itself once it runs. */
+function install(downloaded = false) {
+  gate(downloaded ? OPEN_IT : INSTALL);
+  const dl = document.getElementById("download");
+  if (dl) dl.addEventListener("click", () => setTimeout(() => install(true), 300));
+  clearInterval(watching);
+  watching = setInterval(async () => {
+    if ($("gate").hidden || !(await health(true))) return;
+    clearInterval(watching);
+    enter();
+  }, 2000) as unknown as number;
+}
 
 async function boot() {
   if (!LOCAL && (await loopbackPermission()) !== "granted") {
@@ -95,12 +116,14 @@ async function boot() {
 async function enter() {
   audio().resume(); // we have a user gesture (or a local page): unlock audio now
   const h = await health();
-  if (!h) {
-    const again = !$("gate").hidden && $("retry")?.textContent === "enter";
-    gate(INSTALL + (again ? `<p class="note">still can't find it at ${COMPANION}. Is it running?</p>` : ""));
+  if (!h && !LOCAL && (await loopbackPermission()) === "denied") {
+    gate(`<p>Your browser is keeping this page from reaching zen on your Mac. Click the icon at the left of the address bar, allow it to reach devices on your network (local network access), then try again.</p>
+      <button class="primary" id="retry">try again</button>`);
     $("retry").onclick = () => enter();
     return;
   }
+  if (!h) return install();
+  clearInterval(watching);
   if (cmp(h.version, MIN_COMPANION) < 0) {
     if (h.install === "app")
       gate(`<p>Your zen app (${h.version}) is too old for this room. Download the new one and replace it in Applications.</p>
@@ -114,10 +137,13 @@ async function enter() {
     return;
   }
   if (cmp(h.version, LATEST_COMPANION) < 0) console.info(`zen companion ${LATEST_COMPANION} is available (you have ${h.version})`);
-  setup(h);
+  preflight(h);
 }
 
-// --- setup ------------------------------------------------------------------
+// --- preflight --------------------------------------------------------------------
+// Once zen is found, the page gets everything ready by itself (Claude, the voice, the
+// microphone) on a dark, quiet screen, then offers one thing: sit. Options wait behind
+// "customize".
 
 type Prefs = { mode: "speak" | "write"; model?: string; voice?: string };
 
@@ -135,48 +161,97 @@ function savePrefs(p: Prefs) {
   } catch {}
 }
 
-/** One quiet screen before the room: how to sit, and which mind sits with you. */
-function setup(h: Health) {
-  const models = h.models ?? [{ id: "", name: "default", note: "" }];
-  const prefs = loadPrefs();
-  if (!models.some((m) => m.id === prefs.model)) prefs.model = h.defaultModel ?? models[0]!.id;
+type Step = { state: "checking" | "working" | "ready" | "needed" | "error"; message?: string; fix?: string; done?: number; total?: number };
+
+/** Ask for the microphone now, so the room never opens to a permission prompt. */
+async function micPermission(): Promise<Step> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    return { state: "ready" };
+  } catch (e) {
+    const err = e as DOMException;
+    if (err.name === "NotFoundError") return { state: "needed", message: "No microphone found. Plug one in, or write instead." };
+    if (/system/i.test(err.message))
+      return { state: "needed", message: "macOS is keeping the microphone from your browser. Allow it in System Settings → Privacy & Security → Microphone, then reload this page." };
+    if (err.name === "NotAllowedError")
+      return { state: "needed", message: "The microphone is blocked. Allow it from the icon at the left of the address bar, then try again." };
+    return { state: "error", message: `The microphone isn't available (${err.message}).` };
+  }
+}
+
+const gb = (n = 0) => (n / 1e9).toFixed(1);
+
+/** What the visitor sees while a step is under way: short, quiet. */
+function quietly(name: "claude" | "voice" | "mic", st: Step) {
+  if (name === "mic") return "allow the microphone";
+  if (name === "claude") return "preparing the room";
+  if (st.total) return `the voice is on its way · ${gb(st.done)} of ${gb(st.total)} GB`;
+  if (/install/.test(st.message ?? "")) return "preparing the voice · first time only";
+  if (/wak/.test(st.message ?? "")) return "the voice is waking";
+  return "preparing the voice";
+}
+
+let preparing = 0;
+
+function preflight(h: Health) {
+  const run = ++preparing;
+  const models = h.models ?? [];
   const voices = h.voices ?? [];
+  const prefs = loadPrefs();
+  if (!models.some((m) => m.id === prefs.model)) prefs.model = h.defaultModel ?? models[0]?.id;
   if (!voices.some((v) => v.id === prefs.voice)) prefs.voice = h.defaultVoice ?? voices[0]?.id;
   const choice = (name: string, value: string, label: string, note: string, on: boolean) =>
     `<label class="opt"><input type="radio" name="${name}" value="${value}" ${on ? "checked" : ""}/><span>${label}<small>${note}</small></span></label>`;
   gate(`
-    <form id="setup">
+    <p id="pf-status" class="fine waiting">preparing the room</p>
+    <div id="pf-bar" class="bar" hidden><i></i></div>
+    <div id="pf-need" hidden><p id="pf-msg"></p><code id="pf-fix" hidden></code>
+      <div class="prep-actions"><button class="quiet" id="pf-retry">try again</button><button class="quiet" id="pf-write" hidden>write instead</button></div></div>
+    <button class="primary" id="sit" hidden>${h.sitting?.lines ? "return" : "sit"}</button>
+    <button class="link" id="pf-custom" hidden>customize</button>
+    <form id="setup" hidden>
       <fieldset>
         <legend>sit and</legend>
-        ${choice("mode", "speak", "speak", "out loud, on your Mac", prefs.mode === "speak")}
+        ${choice("mode", "speak", "speak", "out loud", prefs.mode === "speak")}
         ${choice("mode", "write", "write", "in silence", prefs.mode === "write")}
       </fieldset>
-      ${
-        h.models?.length
-          ? `<fieldset>
-        <legend>with</legend>
-        ${models.map((m) => choice("model", m.id, m.name, m.note, m.id === prefs.model)).join("")}
-      </fieldset>`
-          : ""
-      }
-      ${
-        voices.length > 1
-          ? `<fieldset id="voice-choice" ${prefs.mode === "speak" ? "" : "hidden"}>
-        <legend>hearing</legend>
-        ${voices.map((v) => choice("voice", v.id, v.name, v.note, v.id === prefs.voice)).join("")}
-      </fieldset>`
-          : ""
-      }
-      <button class="primary" type="submit">${h.sitting?.lines ? "return" : "sit"}</button>
+      ${models.length ? `<fieldset><legend>with</legend>${models.map((m) => choice("model", m.id, m.name, m.note, m.id === prefs.model)).join("")}</fieldset>` : ""}
+      ${voices.length > 1 ? `<fieldset id="voice-choice" ${prefs.mode === "speak" ? "" : "hidden"}><legend>hearing</legend>${voices.map((v) => choice("voice", v.id, v.name, v.note, v.id === prefs.voice)).join("")}</fieldset>` : ""}
       ${h.sitting?.lines ? `<button type="button" class="quiet" id="begin-again">begin again</button>` : ""}
     </form>`);
-  // Only a speaking visitor hears a voice.
-  const vc = document.getElementById("voice-choice");
-  if (vc)
-    for (const r of document.querySelectorAll<HTMLInputElement>('input[name="mode"]'))
-      r.addEventListener("change", () => {
-        vc.hidden = r.value !== "speak";
-      });
+
+  let mic: Step | undefined;
+  const askMic = () => {
+    mic = { state: "checking" };
+    micPermission().then((m) => (mic = m));
+  };
+  if (prefs.mode === "speak") askMic();
+  let retry = false;
+  let ready = false;
+
+  const form = $<HTMLFormElement>("setup");
+  form.addEventListener("change", () => {
+    const f = new FormData(form);
+    prefs.mode = f.get("mode") === "write" ? "write" : "speak";
+    prefs.model = String(f.get("model") ?? prefs.model ?? "");
+    prefs.voice = String(f.get("voice") ?? prefs.voice ?? "");
+    savePrefs(prefs);
+    const vc = document.getElementById("voice-choice");
+    if (vc) vc.hidden = prefs.mode !== "speak";
+    if (prefs.mode === "speak" && !mic) askMic();
+    tick();
+  });
+  $("pf-custom").onclick = () => (form.hidden = !form.hidden);
+  $("pf-retry").onclick = () => {
+    retry = true;
+    if (mic && mic.state !== "ready") askMic();
+    tick();
+  };
+  $("pf-write").onclick = () => {
+    (form.querySelector('input[value="write"]') as HTMLInputElement).checked = true;
+    form.dispatchEvent(new Event("change"));
+  };
   const again = document.getElementById("begin-again");
   if (again)
     twoStep(again, "forget this sitting?", async () => {
@@ -185,24 +260,61 @@ function setup(h: Health) {
       transcript = [];
       enter();
     });
-  $<HTMLFormElement>("setup").onsubmit = (e) => {
-    e.preventDefault();
-    const f = new FormData(e.target as HTMLFormElement);
-    const p: Prefs = {
-      mode: f.get("mode") === "speak" ? "speak" : "write",
-      model: String(f.get("model") ?? ""),
-      voice: String(f.get("voice") ?? prefs.voice ?? ""),
-    };
-    savePrefs(p);
+  $("sit").onclick = () => {
+    if (!ready) return;
+    preparing++;
+    savePrefs(prefs);
     audio().resume(); // this click is the gesture that lets the monk be heard
     goFull(); // ...and that lets the room fill the screen
-    voiceId = p.voice ?? "";
-    connect(p.model);
-    if (p.mode === "speak") setVoice(true);
+    voiceId = prefs.voice ?? "";
+    connect(prefs.model);
+    if (prefs.mode === "speak") setVoice(true);
   };
+
+  let timer: number | undefined;
+  async function tick() {
+    clearTimeout(timer);
+    if (run !== preparing) return;
+    const speak = prefs.mode === "speak";
+    let r: { monk: Step; voice?: Step } = { monk: { state: "ready" }, voice: { state: "ready" } };
+    try {
+      const res = await fetch(`${COMPANION}/ready?voice=${speak ? 1 : 0}${retry ? "&retry=1" : ""}`, { targetAddressSpace: "loopback" } as RequestInit);
+      if (res.ok) r = await res.json();
+      else if (res.status !== 404) throw new Error(`ready: ${res.status}`); // (404: an older companion, nothing to wait for)
+    } catch {
+      return enter(); // the companion went away
+    }
+    retry = false;
+    if (run !== preparing) return;
+    const steps: ["claude" | "voice" | "mic", Step][] = [["claude", r.monk]];
+    if (speak) steps.push(["voice", r.voice ?? { state: "checking" }], ["mic", mic ?? { state: "checking" }]);
+    const stuck = steps.find(([, st]) => st.state === "needed" || st.state === "error");
+    const busy = steps.find(([, st]) => st.state === "checking" || st.state === "working");
+    ready = !busy && !stuck;
+    const status = $("pf-status");
+    const bar = $("pf-bar");
+    // Something to do and something still under way can both show: fix the one while the other carries on.
+    status.hidden = !busy || (!!stuck && busy[0] !== "voice");
+    $("pf-need").hidden = !stuck;
+    $("sit").hidden = !ready;
+    $("pf-custom").hidden = !ready && !stuck;
+    if (stuck) {
+      $("pf-msg").textContent = stuck[1].message ?? "Something went wrong.";
+      $("pf-fix").hidden = !stuck[1].fix;
+      $("pf-fix").textContent = stuck[1].fix ?? "";
+      $("pf-write").hidden = stuck[0] === "claude";
+    }
+    if (busy) status.textContent = quietly(busy[0], busy[1]);
+    const dl = steps.find(([n, st]) => n === "voice" && st.state === "working" && st.total);
+    bar.hidden = !dl;
+    if (dl) (bar.firstElementChild as HTMLElement).style.width = `${Math.min(100, (100 * (dl[1].done ?? 0)) / dl[1].total!).toFixed(1)}%`;
+    timer = setTimeout(tick, ready ? 3000 : 700) as unknown as number;
+  }
+  tick();
 }
 
 function leave() {
+  preparing++;
   replaced = true; // don't auto-reconnect
   if (voiceOn) setVoice(false);
   ws?.close();
@@ -233,13 +345,12 @@ function connect(m = model) {
     if (replaced) return;
     setTimeout(async () => {
       if (await health()) return connect();
-      gate(INSTALL);
-      $("retry").onclick = () => enter();
+      install();
     }, 1500);
   };
   $("gate").hidden = true;
   $("room").hidden = false;
-  input.focus();
+  if (loadPrefs().mode !== "speak") input.focus(); // speaking: nothing on screen but the dark
 }
 
 function send(msg: object) {

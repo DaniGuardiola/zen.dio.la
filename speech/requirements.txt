@@ -1,0 +1,6 @@
+mlx-audio==0.6.7
+transcribe-cpp==0.4.2
+transcribe-cpp-native==0.4.2
+huggingface_hub
+numpy
+websockets>=15

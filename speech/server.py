@@ -32,8 +32,6 @@ import websockets
 
 PORT = int(os.environ.get("ZEN_SPEECH_PORT", "47471"))
 SR = 24000
-TTS_MODEL = "mlx-community/Breeze-TTS-2-mlx-4bit"
-ALIGN_MODEL = "mlx-community/Qwen3-ForcedAligner-0.6B-4bit"
 DATA_DIR = os.environ.get("ZEN_DATA_DIR", os.path.expanduser("~/Library/Application Support/zen"))
 # Who the monk sounds like: every sentence is cloned from a short clip of a voice. The
 # voices that ship are in voice/ (voices.json says what each clip says); more can be added
@@ -79,6 +77,7 @@ from mlx_audio.tts.utils import load_model  # noqa: E402
 from mlx_audio.stt import load as load_aligner  # noqa: E402
 import transcribe_cpp as tc  # noqa: E402
 from huggingface_hub import hf_hub_download  # noqa: E402
+from models import ALIGN_MODEL, ASR_FILE, TTS_MODEL, VAD_FILE  # noqa: E402
 
 # Native logs: only warnings and errors.
 tc.set_log_callback(lambda level, msg: level in (2, 3) and log(msg.rstrip()))
@@ -167,9 +166,9 @@ mouth.submit(_load_voice).result()
 # speaks; Silero VAD says when they start and stop. All of it on one thread, in order.
 ASR_MODEL = os.environ.get(
     "ZEN_STT_MODEL",
-    hf_hub_download("handy-computer/parakeet-unified-en-0.6b-gguf", "parakeet-unified-en-0.6b-Q8_0.gguf"),
+    hf_hub_download(*ASR_FILE),
 )
-VAD_MODEL = hf_hub_download("handy-computer/silero-vad-v6.2-gguf", "silero-vad-v6.2-F32.gguf")
+VAD_MODEL = hf_hub_download(*VAD_FILE)
 # 5.6 s left context, 0.16 s chunks, 0.32 s lookahead: words land ~0.5 s after they're said.
 STREAM = tc.ParakeetBufferedStreamOptions(left_ms=5600, chunk_ms=160, right_ms=320)
 ear = ThreadPoolExecutor(max_workers=1)
