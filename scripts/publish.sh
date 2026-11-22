@@ -21,9 +21,9 @@ sed -i '' -e "s|^  url \".*\"|  url \"$url\"|" packaging/zen.rb
 tap=$(mktemp -d)
 git clone -q git@github.com:DaniGuardiola/homebrew-tap.git "$tap"
 sed -i '' -e "s|^  url \".*\"|  url \"$url\"|" -e "s|^  sha256 \".*\"|  sha256 \"$sha\"|" "$tap/Formula/zen.rb"
-git -C "$tap" commit -qam "zen $version" && git -C "$tap" push -q
+git -C "$tap" commit -qam "zen $version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && git -C "$tap" push -q
 rm -rf "$tap"
-git commit -qm "packaging: formula at $version" packaging/zen.rb && git push -q || true
+git commit -qm "packaging: formula at $version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" packaging/zen.rb && git push -q || true
 
 # The page.
 bunx wrangler@4 deploy
