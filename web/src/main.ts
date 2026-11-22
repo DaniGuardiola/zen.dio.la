@@ -123,9 +123,9 @@ type Prefs = { mode: "speak" | "write"; model?: string };
 
 function loadPrefs(): Prefs {
   try {
-    return { mode: "write", ...JSON.parse(localStorage.getItem("zen:prefs") ?? "{}") };
+    return { mode: "speak", ...JSON.parse(localStorage.getItem("zen:prefs") ?? "{}") };
   } catch {
-    return { mode: "write" };
+    return { mode: "speak" };
   }
 }
 
