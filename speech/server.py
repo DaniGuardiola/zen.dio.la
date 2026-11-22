@@ -33,7 +33,7 @@ import websockets
 PORT = int(os.environ.get("ZEN_SPEECH_PORT", "47471"))
 SR = 24000
 TTS_MODEL = "mlx-community/Breeze-TTS-2-mlx-4bit"
-ALIGN_MODEL = "mlx-community/Qwen3-ForcedAligner-0.6B-8bit"
+ALIGN_MODEL = "mlx-community/Qwen3-ForcedAligner-0.6B-4bit"
 DATA_DIR = os.environ.get("ZEN_DATA_DIR", os.path.expanduser("~/Library/Application Support/zen"))
 # Who the monk sounds like: every sentence is cloned from a short clip of a voice. The
 # voices that ship are in voice/ (voices.json says what each clip says); more can be added
