@@ -10,7 +10,7 @@ export type MonkEvent =
   | { type: "said"; turn: number } // reply text complete, bookkeeping may follow
   | { type: "done"; turn: number; text: string; checkpoint?: number }
   | { type: "glimmer"; id: string }
-  | { type: "dissolve"; id: string; name: string; plain: string; theirs: string }
+  | { type: "dissolve"; id: string; name: string; plain: string; theirs: string; remembrance: string }
   | { type: "silence" }
   | { type: "error"; message: string };
 
@@ -27,7 +27,7 @@ export const DEFAULT_MODEL = process.env.ZEN_MODEL ?? MODELS[0]!.id;
  * Claude Code install (they need it signed in anyway). launchd's PATH is minimal,
  * so look in the usual places too.
  */
-function claudeCli(): string | undefined {
+export function claudeCli(): string | undefined {
   if (process.env.ZEN_CLAUDE) return process.env.ZEN_CLAUDE;
   if (!import.meta.url.includes("$bunfs")) return undefined;
   const home = process.env.HOME ?? "";
@@ -121,8 +121,14 @@ export class Monk {
             view_id: viewId,
             their_words: z.string().describe("The visitor's own words stating the insight, quoted from their recent messages."),
             how_they_saw_it: z.string(),
+            remembrance: z
+              .string()
+              .describe(
+                "Shown to the visitor when they look back at this light: how they got there in this conversation. Second person, past tense, quiet. " +
+                  "At most 30 words. Mostly what they did and said (their examples, their words in quotes); at most a light touch on where it led. Never 'you saw', 'you learned', 'you realised', 'you understood', no lesson or moral, no doctrine words.",
+              ),
           },
-          async ({ view_id, their_words, how_they_saw_it }) => {
+          async ({ view_id, their_words, how_they_saw_it, remembrance }) => {
             // The light has to be earned in the visitor's own words, not the monk's.
             const recent = s.transcript.filter((l) => l.who === "you").slice(-4).map((l) => l.text).join(" ");
             const said = new Set(recent.toLowerCase().match(/[a-z']+/g) ?? []);
@@ -136,10 +142,11 @@ export class Monk {
             if (!s.dissolved[view_id]) {
               s.order.push(view_id);
               const n = PATH.find((x) => x.id === view_id)!;
-              this.emit({ type: "dissolve", id: view_id, name: n.name, plain: n.plain, theirs: their_words });
+              this.emit({ type: "dissolve", id: view_id, name: n.name, plain: n.plain, theirs: their_words, remembrance });
             }
             s.dissolved[view_id] = how_they_saw_it;
             s.seen = { ...s.seen, [view_id]: their_words };
+            s.remembered = { ...s.remembered, [view_id]: remembrance };
             save(s);
             const left = remaining();
             return text(

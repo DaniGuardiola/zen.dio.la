@@ -5,7 +5,7 @@ import { mountControls } from "./controls.ts";
 
 /** Companion versions this page can talk to, and the newest one released. */
 const MIN_COMPANION = "0.1.0";
-const LATEST_COMPANION = "0.3.1";
+const LATEST_COMPANION = "0.3.2";
 const DMG = "https://github.com/DaniGuardiola/zen.dio.la/releases/latest/download/zen.dmg";
 // Served by a companion itself (any loopback port, except the Vite dev server)?
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && location.port !== "5173";
@@ -319,12 +319,13 @@ type Msg =
       transcript: typeof transcript;
       checkpoints: number[];
       seen?: Record<string, string>;
+      remembered?: Record<string, string>;
     }
   | { type: "turn"; turn: number }
   | { type: "delta"; turn: number; text: string }
   | { type: "done"; turn: number; text: string; checkpoint?: number }
   | { type: "glimmer"; id: string }
-  | { type: "dissolve"; id: string; name: string; plain: string; theirs?: string }
+  | { type: "dissolve"; id: string; name: string; plain: string; theirs?: string; remembrance?: string }
   | { type: "silence" }
   | { type: "voice"; state: "loading" | "on" | "off" | "error"; message?: string }
   | { type: "audio"; id: string; sr: number; pcm: string; words: { w: string; s: number; e: number }[]; text: string }
@@ -341,6 +342,7 @@ function onMessage(m: Msg) {
       m.noticed.forEach((id) => sky.glimmer(id, true));
       m.dissolved.forEach((id) => sky.dissolve(id, true));
       seen = { ...(m.seen ?? {}) };
+      remembered = { ...(m.remembered ?? {}) };
       if (m.silence) silence(true);
       else document.body.classList.remove("silence");
       transcript = m.transcript;
@@ -378,8 +380,10 @@ function onMessage(m: Msg) {
     case "dissolve":
       sky.dissolve(m.id);
       if (m.theirs) seen[m.id] = m.theirs;
+      if (m.remembrance) remembered[m.id] = m.remembrance;
       setTimeout(() => bell(), 600);
-      setTimeout(() => showSeen(m.name, m.plain), 1400);
+      // Their own words, not a lesson.
+      setTimeout(() => showSeen(m.name, m.theirs ? `“${m.theirs}”` : m.plain), 1400);
       break;
     case "silence":
       silence();
@@ -563,6 +567,8 @@ function demo(stars: Star[]) {
 
 /** The visitor's own words for each light they've earned. */
 let seen: Record<string, string> = {};
+/** How they got to each light, recalled to them by the monk. */
+let remembered: Record<string, string> = {};
 const seenEl = $("seen");
 const card = $("star-card");
 let seenTimer: number | undefined;
@@ -601,13 +607,12 @@ function showCard(x: number, y: number) {
     const h = document.createElement("p");
     h.className = "name";
     h.textContent = star.name;
-    card.append(
-      h,
-      row("you held", star.view),
-      row("you saw", seen[star.id] ? `“${seen[star.id]}”` : star.plain),
-      ...(seen[star.id] ? [row("", star.plain)] : []),
-      row("why it matters", star.matters),
-    );
+    const memory = document.createElement("p");
+    memory.className = "memory";
+    memory.textContent = remembered[star.id] || star.plain;
+    card.append(h, memory);
+    if (seen[star.id]) card.append(row("in your words", `“${seen[star.id]}”`));
+    card.append(row("what you set down", star.view));
   } else card.append(row("something you hold", star.view));
   card.hidden = false;
   const w = card.offsetWidth;

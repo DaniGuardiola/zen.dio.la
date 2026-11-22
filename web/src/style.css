@@ -587,7 +587,7 @@ body.voice #say:focus-within #words::placeholder {
   margin-bottom: 0.25rem;
   font-size: 0.85rem;
   letter-spacing: 0.15em;
-  color: var(--faint);
+  color: rgba(233, 228, 216, 0.5);
 }
 
 /* Pointing at a star. */
@@ -614,16 +614,30 @@ body.voice #say:focus-within #words::placeholder {
 }
 
 #star-card .name {
-  font-style: italic;
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
   color: var(--dim);
-  letter-spacing: 0.1em;
+}
+
+#star-card .memory {
+  font-size: 1.05rem;
+  line-height: 1.45;
+  margin-bottom: 0.9rem;
 }
 
 #star-card .label {
   display: block;
-  font-size: 0.75rem;
+  margin-bottom: 0.1rem;
+  font-size: 0.78rem;
   font-style: italic;
-  color: var(--faint);
+  letter-spacing: 0.04em;
+  color: rgba(233, 228, 216, 0.55);
+}
+
+#star-card p:not(.name):not(.memory) {
+  font-size: 0.92rem;
+  color: rgba(233, 228, 216, 0.78);
 }
 
 #star-card .label:empty {

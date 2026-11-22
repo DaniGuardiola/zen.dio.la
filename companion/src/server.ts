@@ -6,8 +6,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ServerWebSocket } from "bun";
 import { sky } from "./curriculum.ts";
-import { backfill } from "./backfill.ts";
-import { Monk, MODELS, DEFAULT_MODEL, type MonkEvent } from "./monk.ts";
+import { backfill, rememberOld } from "./backfill.ts";
+import { Monk, MODELS, DEFAULT_MODEL, claudeCli, type MonkEvent } from "./monk.ts";
 import { load, reset, rewind, type Sitting } from "./state.ts";
 import { Voice, stopSidecar } from "./voice.ts";
 import pkg from "../package.json" with { type: "json" };
@@ -38,6 +38,7 @@ type WS = ServerWebSocket<Conn>;
 
 let sitting: Sitting = load();
 await backfill(sitting);
+rememberOld(sitting, claudeCli()); // in the background; the page picks it up on next load
 let active: WS | undefined; // one sitting at a time
 
 function send(ws: WS, msg: object) {
@@ -52,6 +53,10 @@ function hello(ws: WS) {
     noticed: Object.keys(sitting.noticed),
     dissolved: sitting.order,
     seen: sitting.seen ?? {}, // the visitor's own words for each light
+    // How they got to each light; older lights only have the monk's own note.
+    remembered: Object.fromEntries(
+      sitting.order.map((id) => [id, sitting.remembered?.[id] ?? sitting.dissolved[id] ?? ""]),
+    ),
     silence: sitting.silence,
     transcript: sitting.transcript,
     // Points the visitor can return to (transcript lengths after a finished reply).

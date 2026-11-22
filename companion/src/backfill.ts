@@ -74,3 +74,30 @@ export async function backfill(s: Sitting, dir = DATA_DIR) {
   save(s);
   console.log(`backfill: ${out.length} return points from ${turns.length} turns`);
 }
+
+/**
+ * Lights earned before remembrances existed only have the monk's third-person note
+ * ("Looked for 'me' in the body..."). Turn those into quiet second-person recollections.
+ */
+export async function rememberOld(s: Sitting, cli?: string) {
+  const missing = s.order.filter((id) => !s.remembered?.[id] && s.dissolved[id]);
+  if (!missing.length) return;
+  const { query } = await import("@anthropic-ai/claude-agent-sdk");
+  const notes = missing.map((id) => `${id}: ${s.dissolved[id]}`).join("\n");
+  const prompt = `Rewrite each note below as something said to the person, about how they got there in a conversation. Second person, past tense, quiet. At most 30 words. Mostly what they did and said (their examples, their words in quotes); at most a light touch on where it led. Never "you saw", "you learned", "you realised", "you understood", no lesson or moral, no doctrine words. Answer only with JSON: {"<id>": "<text>", ...}.\n\n${notes}`;
+  let out = "";
+  try {
+    for await (const m of query({
+      prompt,
+      options: { model: "claude-haiku-5-5", tools: [], settingSources: [], persistSession: false, cwd: DATA_DIR, pathToClaudeCodeExecutable: cli },
+    }))
+      if (m.type === "result" && m.subtype === "success") out = m.result;
+    const json = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as Record<string, string>;
+    s.remembered = { ...s.remembered };
+    for (const id of missing) if (typeof json[id] === "string" && json[id]) s.remembered[id] = json[id];
+    save(s);
+    console.log(`remembered ${Object.keys(json).length} older lights`);
+  } catch (e) {
+    console.warn("could not rewrite older lights:", e);
+  }
+}
