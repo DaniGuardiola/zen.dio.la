@@ -5,7 +5,8 @@ import { mountControls } from "./controls.ts";
 
 /** Companion versions this page can talk to, and the newest one released. */
 const MIN_COMPANION = "0.1.0";
-const LATEST_COMPANION = "0.1.0";
+const LATEST_COMPANION = "0.2.0";
+const DMG = "https://github.com/DaniGuardiola/zen.dio.la/releases/latest/download/zen.dmg";
 // Served by a companion itself (any loopback port, except the Vite dev server)?
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && location.port !== "5173";
 const COMPANION = LOCAL ? location.origin : "http://127.0.0.1:47470";
@@ -47,6 +48,7 @@ const cmp = (a: string, b: string) => {
 
 type Health = {
   version: string;
+  install?: "brew" | "app" | "dev";
   sitting?: { lines: number; lights: number; silence: boolean }; models?: { id: string; name: string; note: string }[]; defaultModel?: string };
 
 async function health(): Promise<Health | undefined> {
@@ -74,6 +76,8 @@ function gate(html: string) {
 
 const INSTALL = `
   <p>zen needs a small companion on your Mac. It runs the monk with Claude, and listens and speaks with voice models that stay on your machine.</p>
+  <a class="primary" href="${DMG}">download zen for Mac</a>
+  <p class="or">or with Homebrew</p>
   <code>brew install daniguardiola/tap/zen
 brew services start daniguardiola/tap/zen</code>
   <p>The monk speaks through Claude Code, so you need it installed and signed in (<a href="https://claude.com/claude-code" style="color:inherit">claude.com/claude-code</a>). Apple Silicon only, for now.</p>
@@ -98,10 +102,15 @@ async function enter() {
     return;
   }
   if (cmp(h.version, MIN_COMPANION) < 0) {
-    gate(`<p>Your companion (${h.version}) is too old for this room.</p>
-      <code>brew upgrade daniguardiola/tap/zen</code>
-      <button class="primary" id="update">update now</button>`);
-    $("update").onclick = update;
+    if (h.install === "app")
+      gate(`<p>Your zen app (${h.version}) is too old for this room. Download the new one and replace it in Applications.</p>
+        <a class="primary" href="${DMG}">download zen</a>`);
+    else {
+      gate(`<p>Your companion (${h.version}) is too old for this room.</p>
+        <code>brew upgrade daniguardiola/tap/zen</code>
+        <button class="primary" id="update">update now</button>`);
+      $("update").onclick = update;
+    }
     return;
   }
   if (cmp(h.version, LATEST_COMPANION) < 0) console.info(`zen companion ${LATEST_COMPANION} is available (you have ${h.version})`);

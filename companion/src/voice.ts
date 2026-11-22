@@ -39,7 +39,8 @@ async function python(status: (s: string) => void): Promise<string> {
   const venv = join(DATA_DIR, "speech-venv");
   const py = join(venv, "bin", "python");
   if (existsSync(join(venv, ".ready"))) return py;
-  const uv = Bun.which("uv", { PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` });
+  // The app bundles its own uv; Homebrew installs depend on the uv formula.
+  const uv = process.env.ZEN_UV ?? Bun.which("uv", { PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` });
   if (!uv) throw new Error("uv is needed for voice: brew install uv");
   status("installing voice models, first time only");
   const run = async (args: string[]) => {

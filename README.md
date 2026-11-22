@@ -14,7 +14,9 @@ monk itself is Claude.
 ## Play
 
 Open **https://zen.dio.la**. It needs a small companion on your Mac (Apple Silicon) and
-[Claude Code](https://claude.com/claude-code), installed and signed in:
+[Claude Code](https://claude.com/claude-code), installed and signed in. Either
+[download zen for Mac](https://github.com/DaniGuardiola/zen.dio.la/releases/latest/download/zen.dmg)
+(a menu bar app; open it and it opens the room), or use Homebrew:
 
 ```sh
 brew install daniguardiola/tap/zen
@@ -50,7 +52,8 @@ Vite dev server origin.
 | `companion/src/server.ts` | Loopback HTTP + WebSocket, origin allowlist, `/health`, `/update`, serves the page. |
 | `speech/server.py` | Local STT (NVIDIA Parakeet Unified EN 0.6B streaming via transcribe.cpp on Metal, Silero VAD for start/stop) + TTS (Kokoro-82M with per-word timestamps, `lexicon.py` for Sanskrit/Pali names). |
 | `web/` | The page: canvas sky, the monk's words revealed at speaking pace, mic capture, playback that knows which word you heard last. |
-| `packaging/zen.rb`, `scripts/release.sh` | Homebrew formula for `daniguardiola/tap` + release tarball. |
+| `packaging/zen.rb`, `scripts/release.sh` | Homebrew formula for `daniguardiola/tap` + signed, notarized release (tarball and `.dmg`). |
+| `macos/` | `zen.app`: a menu bar app that runs the companion (open, open at login, quit), its icon and entitlements. |
 
 ## How it keeps the monk honest
 
@@ -82,8 +85,9 @@ the monk is saying is treated as echo.
 
 - Page: `(cd web && bun run build) && bunx wrangler deploy` (Cloudflare Workers, `wrangler.jsonc`).
 - Companion: bump `companion/package.json` (and `LATEST_COMPANION` in `web/src/main.ts`),
-  run `scripts/release.sh`, attach the tarball and `SHA256SUMS` to a GitHub release
-  `v<version>`, and update `Formula/zen.rb` in `daniguardiola/homebrew-tap`.
+  run `scripts/release.sh` (signs with your Developer ID and notarizes with the `zen`
+  notarytool profile; see the script), attach the tarball, `zen.dmg` and `SHA256SUMS` to a
+  GitHub release `v<version>`, and update `Formula/zen.rb` in `daniguardiola/homebrew-tap`.
 
 ## Install and updates (Homebrew)
 

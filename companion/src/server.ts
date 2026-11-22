@@ -13,6 +13,8 @@ import { Voice, stopSidecar } from "./voice.ts";
 import pkg from "../package.json" with { type: "json" };
 
 const PORT = Number(process.env.ZEN_PORT ?? 47470);
+/** How this companion was installed: "brew" (formula), "app" (zen.app from the .dmg) or "dev". */
+const INSTALL = process.env.ZEN_INSTALL ?? (import.meta.url.includes("$bunfs") ? "brew" : "dev");
 const WEB_DIR = process.env.ZEN_WEB_DIR ?? join(import.meta.dir, "..", "..", "web", "dist");
 const ALLOWED = [
   "https://zen.dio.la",
@@ -93,6 +95,7 @@ const server = Bun.serve<Conn>({
           protocol: 1,
           models: MODELS,
           defaultModel: DEFAULT_MODEL,
+          install: INSTALL,
           sitting: { lines: sitting.transcript.length, lights: sitting.order.length, silence: sitting.silence },
         },
         { headers: cors(origin) },
@@ -119,6 +122,8 @@ const server = Bun.serve<Conn>({
 
     if (url.pathname === "/update" && req.method === "POST") {
       if (!origin || !ALLOWED.includes(origin)) return new Response("forbidden", { status: 403 });
+      // Only Homebrew installs can update themselves; the app is updated by downloading it again.
+      if (INSTALL !== "brew") return Response.json({ ok: false, install: INSTALL }, { status: 409, headers: cors(origin) });
       // Homebrew installs: upgrade, then let launchd restart us.
       Bun.spawn(["/bin/sh", "-c", "brew upgrade daniguardiola/tap/zen && brew services restart daniguardiola/tap/zen"], {
         stdio: ["ignore", "inherit", "inherit"],
@@ -211,4 +216,9 @@ const server = Bun.serve<Conn>({
 
 console.log(`zen companion ${pkg.version} on http://127.0.0.1:${server.port}`);
 process.on("SIGINT", () => (stopSidecar(), process.exit(0)));
+// Run by zen.app: if the app goes away (quit, crash, killed), go with it.
+if (INSTALL === "app")
+  setInterval(() => {
+    if (process.ppid === 1) stopSidecar(), process.exit(0);
+  }, 2000);
 process.on("SIGTERM", () => (stopSidecar(), process.exit(0)));

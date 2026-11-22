@@ -227,7 +227,19 @@ button {
   text-align: left;
 }
 
-#gate button.primary {
+#gate .or {
+  margin: 0.4rem 0 -0.4rem;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+#gate a.primary {
+  display: inline-block;
+  text-decoration: none;
+}
+
+#gate button.primary,
+#gate a.primary {
   border: 1px solid var(--dim);
   color: var(--ink);
   padding: 0.5rem 1.4rem;
