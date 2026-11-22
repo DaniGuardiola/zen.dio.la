@@ -47,6 +47,25 @@ def rest_after(text: str) -> float:
     return 0.0
 
 
+def speakable(text: str) -> list[str]:
+    """Split into sentences for pacing, but never hand the voice a tiny one on its own:
+    alone, "Ha." or "Me." comes out garbled ("hog", "mayo"). Short ones ride along."""
+    out, cur = [], ""
+    for s in re.split(r"(?<=[.!?…])\s+", text.strip()):
+        if not s:
+            continue
+        cur = (cur + " " + s).strip()
+        if len(cur.split()) >= 5:
+            out.append(cur)
+            cur = ""
+    if cur:
+        if out and len(cur.split()) < 3:
+            out[-1] += " " + cur
+        else:
+            out.append(cur)
+    return out
+
+
 def log(*a):
     print("[speech]", *a, file=sys.stderr, flush=True)
 
@@ -173,11 +192,10 @@ class Session:
     def synth(self, gen, chunk_id, text, pause):
         """Runs in a worker thread. Kokoro yields one result per phrase it splits off."""
         t0 = time.perf_counter()
-        # Each sentence on its own, so the pauses between them are ours, not the model's.
+        # Sentence by sentence, so the pauses between them are ours, not the model's.
         results = [
             r
-            for sentence in re.split(r"(?<=[.!?…])\s+", text.strip())
-            if sentence
+            for sentence in speakable(text)
             # A touch of variation from sentence to sentence, so it doesn't sound read off a page.
             for r in tts(pronounce(sentence), voice=VOICE, speed=SPEED * random.uniform(0.97, 1.03))
             if r.audio is not None

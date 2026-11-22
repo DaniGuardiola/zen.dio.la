@@ -5,7 +5,7 @@ import { mountControls } from "./controls.ts";
 
 /** Companion versions this page can talk to, and the newest one released. */
 const MIN_COMPANION = "0.1.0";
-const LATEST_COMPANION = "0.3.0";
+const LATEST_COMPANION = "0.3.1";
 const DMG = "https://github.com/DaniGuardiola/zen.dio.la/releases/latest/download/zen.dmg";
 // Served by a companion itself (any loopback port, except the Vite dev server)?
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && location.port !== "5173";
