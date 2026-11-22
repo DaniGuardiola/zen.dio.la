@@ -254,7 +254,14 @@ function render() {
     }
   }
   laid = reply.slice(0, Math.max(laid.length, upto));
-  for (const w of words) w.el.classList.toggle("on", w.end <= shown);
+  let last: HTMLElement | undefined;
+  for (const w of words) if (w.el.classList.toggle("on", w.end <= shown)) last = w.el;
+  // A long reply scrolls within its place, keeping the newest word in view.
+  if (last) {
+    const box = monkEl.getBoundingClientRect();
+    const r = last.getBoundingClientRect();
+    if (r.bottom > box.bottom) monkEl.scrollTop += r.bottom - box.bottom + 4;
+  } else monkEl.scrollTop = 0;
 }
 
 function reveal(n: number) {

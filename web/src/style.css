@@ -33,26 +33,30 @@ body {
   height: 100%;
 }
 
+/* Fixed places, so nothing shifts while you read: the monk's words start at the same
+   height every time and flow down; your words live in their own fixed band below. */
 #room {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   align-items: center;
-  padding: 0 16px 12vh;
+  padding: 46vh 16px 9vh;
   pointer-events: none;
 }
 
 #monk {
-  max-width: 34rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: min(34rem, 100%);
+  overflow-y: auto;
+  scrollbar-width: none;
   font-size: clamp(1.25rem, 2.6vw, 1.65rem);
   font-weight: 300;
   line-height: 1.5;
   text-align: center;
-  min-height: 3em;
-  text-wrap: pretty;
   transition: opacity 1.2s ease;
+  pointer-events: auto;
 }
 
 #monk .w {
@@ -65,18 +69,28 @@ body {
 }
 
 #you {
-  margin-top: 1.6rem;
+  flex: none;
+  /* Three lines, always: newest at the bottom, older ones fade out above. */
+  height: 4.8em;
+  margin-top: 1rem;
+  width: min(32rem, 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 1.6em);
+  mask-image: linear-gradient(to bottom, transparent, #000 1.6em);
   font-style: italic;
   font-size: 1.05rem;
+  line-height: 1.6;
   color: var(--dim);
-  min-height: 1.6em;
-  max-width: 32rem;
   text-align: center;
   transition: opacity 2s ease;
 }
 
 #say {
-  margin-top: 1.2rem;
+  flex: none;
+  margin-top: 0.8rem;
   width: min(32rem, 100%);
   pointer-events: auto;
 }
@@ -114,7 +128,8 @@ button {
 }
 
 #mic {
-  margin-top: 1.4rem;
+  flex: none;
+  margin-top: 1.2rem;
   width: 2.2rem;
   height: 2.2rem;
   display: grid;
