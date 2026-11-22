@@ -83,7 +83,8 @@ the monk is saying is treated as echo.
 
 ## Releasing
 
-- Page: `(cd web && bun run build) && bunx wrangler deploy` (Cloudflare Workers, `wrangler.jsonc`).
+- Page: deploys itself on every push to `main` (Cloudflare Workers Builds, `wrangler.jsonc`).
+  By hand: `(cd web && bun run build) && bunx wrangler deploy`.
 - Companion: bump `companion/package.json` (and `LATEST_COMPANION` in `web/src/main.ts`),
   run `scripts/release.sh` (signs with your Developer ID and notarizes with the `zen`
   notarytool profile; see the script), attach the tarball, `zen.dmg` and `SHA256SUMS` to a

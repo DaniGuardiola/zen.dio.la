@@ -1,5 +1,6 @@
 #!/bin/sh
-# Publishes what scripts/release.sh built: GitHub release, Homebrew formula, the page.
+# Publishes what scripts/release.sh built: GitHub release and Homebrew formula.
+# (The page deploys itself from main, via Cloudflare Workers Builds.)
 #   scripts/publish.sh "release notes"
 set -eu
 cd "$(dirname "$0")/.."

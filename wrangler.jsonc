@@ -1,5 +1,6 @@
 // The web page at https://zen.dio.la (static; the monk runs in the local companion).
-// Deploy: (cd web && bun run build) && bunx wrangler deploy
+// Deployed by Cloudflare Workers Builds on every push to main.
+// By hand: (cd web && bun run build) && bunx wrangler deploy
 {
   "name": "zen-dio-la",
   "compatibility_date": "2026-11-01",
