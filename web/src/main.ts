@@ -75,7 +75,7 @@ function gate(html: string) {
 const INSTALL = `
   <p>zen needs a small companion on your Mac. It runs the monk with Claude, and listens and speaks with voice models that stay on your machine.</p>
   <code>brew install daniguardiola/tap/zen
-brew services start zen</code>
+brew services start daniguardiola/tap/zen</code>
   <p>The monk speaks through Claude Code, so you need it installed and signed in (<a href="https://claude.com/claude-code" style="color:inherit">claude.com/claude-code</a>). Apple Silicon only, for now.</p>
   <button class="primary" id="retry">enter</button>`;
 

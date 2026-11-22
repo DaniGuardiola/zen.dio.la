@@ -120,7 +120,7 @@ const server = Bun.serve<Conn>({
     if (url.pathname === "/update" && req.method === "POST") {
       if (!origin || !ALLOWED.includes(origin)) return new Response("forbidden", { status: 403 });
       // Homebrew installs: upgrade, then let launchd restart us.
-      Bun.spawn(["/bin/sh", "-c", "brew upgrade daniguardiola/tap/zen && brew services restart zen"], {
+      Bun.spawn(["/bin/sh", "-c", "brew upgrade daniguardiola/tap/zen && brew services restart daniguardiola/tap/zen"], {
         stdio: ["ignore", "inherit", "inherit"],
       });
       return Response.json({ ok: true }, { headers: cors(origin) });

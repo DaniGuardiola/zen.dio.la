@@ -18,7 +18,7 @@ Open **https://zen.dio.la**. It needs a small companion on your Mac (Apple Silic
 
 ```sh
 brew install daniguardiola/tap/zen
-brew services start zen
+brew services start daniguardiola/tap/zen
 ```
 
 ## Run it (development)
@@ -92,7 +92,7 @@ page, speech sidecar) and its sha256. Publish it as a GitHub release, then copy
 `packaging/zen.rb` into the tap as `Formula/zen.rb`. Users:
 
 ```sh
-brew install daniguardiola/tap/zen && brew services start zen
+brew install daniguardiola/tap/zen && brew services start daniguardiola/tap/zen
 ```
 
 zen.dio.la checks `/health`: missing companion → install instructions; too old → an
