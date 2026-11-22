@@ -612,7 +612,7 @@ function showCard(x: number, y: number) {
     memory.textContent = remembered[star.id] || star.plain;
     card.append(h, memory);
     if (seen[star.id]) card.append(row("in your words", `“${seen[star.id]}”`));
-    card.append(row("what you set down", star.view));
+    card.append(row("where you started", star.view));
   } else card.append(row("something you hold", star.view));
   card.hidden = false;
   const w = card.offsetWidth;
