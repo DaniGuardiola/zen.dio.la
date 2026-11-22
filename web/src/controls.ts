@@ -35,18 +35,22 @@ export function mountControls(el: HTMLElement) {
   el.innerHTML = `
     <div class="vol">
       <button type="button" id="c-mute" class="ctl" aria-label="mute"></button>
-      <input type="range" id="c-volume" min="0" max="1" step="0.01" aria-label="volume" />
+      <span class="tipwrap" id="c-volume-tip"><input type="range" id="c-volume" min="0" max="1" step="0.01" aria-label="volume" /></span>
     </div>
-    <button type="button" id="c-ambience" class="ctl" title="room tone" aria-label="room tone">${ICONS.ambience}</button>
-    <button type="button" id="c-room" class="ctl" title="echo of the room" aria-label="echo of the room">${ICONS.room}</button>`;
+    <button type="button" id="c-ambience" class="ctl" aria-label="room tone">${ICONS.ambience}</button>
+    <button type="button" id="c-room" class="ctl" aria-label="echo of the room">${ICONS.room}</button>`;
   const mute = el.querySelector<HTMLButtonElement>("#c-mute")!;
   const volume = el.querySelector<HTMLInputElement>("#c-volume")!;
   const amb = el.querySelector<HTMLButtonElement>("#c-ambience")!;
   const room = el.querySelector<HTMLButtonElement>("#c-room")!;
+  const volumeTip = el.querySelector<HTMLElement>("#c-volume-tip")!;
 
   const sync = () => {
     mute.innerHTML = prefs.muted || prefs.volume === 0 ? ICONS.muted : ICONS.volume;
-    mute.title = prefs.muted ? "unmute" : "mute";
+    mute.dataset.tip = prefs.muted ? "unmute" : "mute";
+    volumeTip.dataset.tip = `volume ${Math.round(prefs.volume * 100)}%`;
+    amb.dataset.tip = `room tone: ${prefs.ambience ? "on" : "off"}`;
+    room.dataset.tip = `echo of the room: ${prefs.room ? "on" : "off"}`;
     mute.setAttribute("aria-pressed", String(prefs.muted));
     volume.value = String(prefs.volume);
     volume.style.setProperty("--fill", `${prefs.volume * 100}%`);

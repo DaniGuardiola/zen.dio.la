@@ -374,7 +374,8 @@ function onMessage(m: Msg) {
       break;
     case "voice":
       micBtn.dataset.state = m.state;
-      micBtn.title = m.message ?? "voice";
+      micBtn.dataset.tip =
+        m.message ?? { loading: "waking the voice…", on: "listening · click to write instead", off: "speak", error: "voice unavailable" }[m.state];
       if (m.message) {
         youEl.style.opacity = "1";
         youEl.textContent = m.state === "error" ? `voice: ${m.message}` : `${m.message}…`;
