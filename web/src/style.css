@@ -301,6 +301,10 @@ body.silence #room {
   gap: 1.6rem;
 }
 
+#setup fieldset[hidden] {
+  display: none;
+}
+
 #setup fieldset {
   border: none;
   margin: 0;

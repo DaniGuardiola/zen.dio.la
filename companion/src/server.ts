@@ -9,7 +9,7 @@ import { sky } from "./curriculum.ts";
 import { backfill, rememberOld } from "./backfill.ts";
 import { Monk, MODELS, DEFAULT_MODEL, claudeCli, type MonkEvent } from "./monk.ts";
 import { load, reset, rewind, type Sitting } from "./state.ts";
-import { Voice, stopSidecar } from "./voice.ts";
+import { DEFAULT_VOICE, Voice, stopSidecar, voices } from "./voice.ts";
 import pkg from "../package.json" with { type: "json" };
 
 const PORT = Number(process.env.ZEN_PORT ?? 47470);
@@ -33,7 +33,7 @@ const cors = (origin: string | null): Record<string, string> =>
       }
     : {};
 
-type Conn = { model: string; monk?: Monk; voice?: Voice; heard?: string; muteTurn?: number; flushed?: number; chain: Promise<unknown> };
+type Conn = { model: string; voiceId: string; monk?: Monk; voice?: Voice; heard?: string; muteTurn?: number; flushed?: number; chain: Promise<unknown> };
 type WS = ServerWebSocket<Conn>;
 
 let sitting: Sitting = load();
@@ -101,6 +101,8 @@ const server = Bun.serve<Conn>({
           protocol: 1,
           models: MODELS,
           defaultModel: DEFAULT_MODEL,
+          voices: voices(),
+          defaultVoice: DEFAULT_VOICE,
           install: INSTALL,
           sitting: { lines: sitting.transcript.length, lights: sitting.order.length, silence: sitting.silence },
         },
@@ -112,7 +114,9 @@ const server = Bun.serve<Conn>({
       if (!origin || !ALLOWED.includes(origin)) return new Response("forbidden", { status: 403 });
       const wanted = url.searchParams.get("model") ?? "";
       const model = MODELS.some((m) => m.id === wanted) ? wanted : DEFAULT_MODEL;
-      return srv.upgrade(req, { data: { model, chain: Promise.resolve() } }) ? undefined : new Response("upgrade failed", { status: 400 });
+      const wantedVoice = url.searchParams.get("voice") ?? "";
+      const voiceId = voices().some((v) => v.id === wantedVoice) ? wantedVoice : DEFAULT_VOICE;
+      return srv.upgrade(req, { data: { model, voiceId, chain: Promise.resolve() } }) ? undefined : new Response("upgrade failed", { status: 400 });
     }
 
     if (url.pathname === "/reset" && req.method === "POST") {
@@ -175,6 +179,7 @@ const server = Bun.serve<Conn>({
                 // Visitor started talking over the monk: stop feeding TTS for this turn.
                 c.muteTurn = c.monk?.turn;
               },
+              c.voiceId,
             );
             try {
               await v.connect();

@@ -8,7 +8,7 @@
  *   - STT "final" -> wait a short grace period for the visitor to continue, then send
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { DATA_DIR } from "./state.ts";
@@ -66,7 +66,7 @@ export async function ensureSidecar(status: (s: string) => void = () => {}): Pro
     status(firstStart() ? "downloading the voice, about 4 GB, first time only" : "waking the voice");
     child = spawn(py, [join(SPEECH_DIR, "server.py")], {
       stdio: ["ignore", "pipe", "inherit"],
-      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), TOKENIZERS_PARALLELISM: "false" },
+      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), ZEN_DATA_DIR: DATA_DIR, TOKENIZERS_PARALLELISM: "false" },
     });
     child.on("exit", () => (child = undefined));
   }
@@ -76,6 +76,25 @@ export async function ensureSidecar(status: (s: string) => void = () => {}): Pro
     await Bun.sleep(500);
   }
   return false;
+}
+
+/**
+ * Who the monk can sound like: the voices that ship with zen (speech/voice/voices.json),
+ * plus any clip added on this Mac as <data>/voices/<id>.wav (with <id>.txt, what it says).
+ */
+export const DEFAULT_VOICE = "elder";
+export function voices(): { id: string; name: string; note: string }[] {
+  const bundled = (JSON.parse(readFileSync(join(SPEECH_DIR, "voice", "voices.json"), "utf8")) as { id: string; name: string; note: string }[]).map(
+    ({ id, name, note }) => ({ id, name, note }),
+  );
+  const dir = join(DATA_DIR, "voices");
+  const own = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => /^[a-z0-9_-]+\.wav$/.test(f) && existsSync(join(dir, f.replace(/\.wav$/, ".txt"))))
+        .map((f) => f.replace(/\.wav$/, ""))
+        .filter((id) => !bundled.some((v) => v.id === id))
+    : [];
+  return [...bundled, ...own.map((id) => ({ id, name: id.replace(/[-_]/g, " "), note: "your own clip" }))];
 }
 
 /** The voice model isn't downloaded yet: this is the first time the voice wakes. */
@@ -127,6 +146,7 @@ export class Voice {
     private toBrowser: (msg: object) => void,
     private onUtterance: (text: string) => void,
     private onBarge: () => void,
+    private voice = DEFAULT_VOICE,
   ) {}
 
   async connect() {
@@ -288,7 +308,7 @@ export class Voice {
   private speak(turn: number, text: string, pause: number) {
     const id = `${turn}:${this.chunkSeq++}`;
     this.sentAt.set(id, Date.now());
-    this.ws?.send(JSON.stringify({ type: "speak", id, text: text.trim(), pause }));
+    this.ws?.send(JSON.stringify({ type: "speak", id, text: text.trim(), pause, voice: this.voice }));
   }
 
   cancel() {

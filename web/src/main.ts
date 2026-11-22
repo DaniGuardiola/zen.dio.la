@@ -49,7 +49,7 @@ const cmp = (a: string, b: string) => {
 type Health = {
   version: string;
   install?: "brew" | "app" | "dev";
-  sitting?: { lines: number; lights: number; silence: boolean }; models?: { id: string; name: string; note: string }[]; defaultModel?: string };
+  sitting?: { lines: number; lights: number; silence: boolean }; models?: { id: string; name: string; note: string }[]; defaultModel?: string; voices?: { id: string; name: string; note: string }[]; defaultVoice?: string };
 
 async function health(): Promise<Health | undefined> {
   try {
@@ -119,7 +119,7 @@ async function enter() {
 
 // --- setup ------------------------------------------------------------------
 
-type Prefs = { mode: "speak" | "write"; model?: string };
+type Prefs = { mode: "speak" | "write"; model?: string; voice?: string };
 
 function loadPrefs(): Prefs {
   try {
@@ -140,6 +140,8 @@ function setup(h: Health) {
   const models = h.models ?? [{ id: "", name: "default", note: "" }];
   const prefs = loadPrefs();
   if (!models.some((m) => m.id === prefs.model)) prefs.model = h.defaultModel ?? models[0]!.id;
+  const voices = h.voices ?? [];
+  if (!voices.some((v) => v.id === prefs.voice)) prefs.voice = h.defaultVoice ?? voices[0]?.id;
   const choice = (name: string, value: string, label: string, note: string, on: boolean) =>
     `<label class="opt"><input type="radio" name="${name}" value="${value}" ${on ? "checked" : ""}/><span>${label}<small>${note}</small></span></label>`;
   gate(`
@@ -157,9 +159,24 @@ function setup(h: Health) {
       </fieldset>`
           : ""
       }
+      ${
+        voices.length > 1
+          ? `<fieldset id="voice-choice" ${prefs.mode === "speak" ? "" : "hidden"}>
+        <legend>hearing</legend>
+        ${voices.map((v) => choice("voice", v.id, v.name, v.note, v.id === prefs.voice)).join("")}
+      </fieldset>`
+          : ""
+      }
       <button class="primary" type="submit">${h.sitting?.lines ? "return" : "sit"}</button>
       ${h.sitting?.lines ? `<button type="button" class="quiet" id="begin-again">begin again</button>` : ""}
     </form>`);
+  // Only a speaking visitor hears a voice.
+  const vc = document.getElementById("voice-choice");
+  if (vc)
+    for (const r of document.querySelectorAll<HTMLInputElement>('input[name="mode"]'))
+      r.addEventListener("change", () => {
+        vc.hidden = r.value !== "speak";
+      });
   const again = document.getElementById("begin-again");
   if (again)
     twoStep(again, "forget this sitting?", async () => {
@@ -171,10 +188,15 @@ function setup(h: Health) {
   $<HTMLFormElement>("setup").onsubmit = (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
-    const p: Prefs = { mode: f.get("mode") === "speak" ? "speak" : "write", model: String(f.get("model") ?? "") };
+    const p: Prefs = {
+      mode: f.get("mode") === "speak" ? "speak" : "write",
+      model: String(f.get("model") ?? ""),
+      voice: String(f.get("voice") ?? prefs.voice ?? ""),
+    };
     savePrefs(p);
     audio().resume(); // this click is the gesture that lets the monk be heard
     goFull(); // ...and that lets the room fill the screen
+    voiceId = p.voice ?? "";
     connect(p.model);
     if (p.mode === "speak") setVoice(true);
   };
@@ -195,11 +217,12 @@ async function update() {
 }
 
 let model = "";
+let voiceId = "";
 
 function connect(m = model) {
   model = m;
   replaced = false;
-  ws = new WebSocket(COMPANION.replace(/^http/, "ws") + "/ws" + (model ? `?model=${encodeURIComponent(model)}` : ""));
+  ws = new WebSocket(COMPANION.replace(/^http/, "ws") + "/ws?" + new URLSearchParams({ model, voice: voiceId }));
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   audio().resume().then(startAmbience); // resolves once audio is allowed (after a click)
   ws.onclose = () => {

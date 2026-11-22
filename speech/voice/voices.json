@@ -1,0 +1,16 @@
+[
+  {
+    "id": "elder",
+    "name": "the elder",
+    "note": "soft, slow, gently amused",
+    "text": "Sit down, if you like. There's no hurry here. The tea is still warm, and the evening is long.",
+    "about": "Designed once with Breeze TTS 2 from: An old man in his seventies, a Buddhist monk. Low, soft and calm, unhurried, a little warm and gently amused. Speaks slowly and close, in a quiet room. (seed 7)"
+  },
+  {
+    "id": "alan-watts",
+    "name": "alan watts",
+    "note": "from his lectures",
+    "text": "It will all be made clear, and I used to think that on wet afternoons in heaven we would all sit around the throne of grace and say to the Lord God, now just why did you do it this way and how did you manage it that? And he would explain it and make it all very clear.",
+    "about": "15 seconds from Alan Watts, Essential Lectures, Philosophies of Asia, 'Taoist Way' (12:42)."
+  }
+]

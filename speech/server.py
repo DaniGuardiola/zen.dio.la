@@ -1,11 +1,11 @@
 """
 zen speech sidecar: local STT (Parakeet Unified, streaming, via transcribe.cpp, with
-Silero VAD) + TTS (Breeze TTS 2 on MLX, cloning the monk's voice from voice/monk.wav, with word timings from a forced aligner).
+Silero VAD) + TTS (Breeze TTS 2 on MLX, cloning the monk's voice from a short clip, with word timings from a forced aligner).
 
 Talks to the companion over a loopback WebSocket. Never reached by the browser directly.
 
 in  (binary)  int16 LE mono PCM @ 16 kHz, mic audio
-in  (json)    {"type":"speak","id":str,"text":str}   synthesize one chunk (a sentence or two)
+in  (json)    {"type":"speak","id":str,"text":str,"pause":s,"voice":id}   synthesize one chunk
 in  (json)    {"type":"cancel"}                      drop all queued/in-flight synthesis
 in  (json)    {"type":"commit"}                      the utterance so far became a turn; start a new one
 out (json)    {"type":"ready"}
@@ -34,15 +34,25 @@ PORT = int(os.environ.get("ZEN_SPEECH_PORT", "47471"))
 SR = 24000
 TTS_MODEL = "mlx-community/Breeze-TTS-2-mlx-4bit"
 ALIGN_MODEL = "mlx-community/Qwen3-ForcedAligner-0.6B-8bit"
-# Who the monk sounds like: every sentence is cloned from this clip. It was designed once
-# with Breeze from "A mellow middle-aged British man with a rich, resonant voice, playful
-# and wise, a philosopher giving an intimate talk. Relaxed, unhurried, a smile in the voice."
-# (seed 19), and ships as a file so everyone hears the same man.
-REF_AUDIO = os.environ.get("ZEN_VOICE_REF", os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice", "monk.wav"))
-SEED = int(os.environ.get("ZEN_VOICE_SEED", "19"))
-REF_TEXT = os.environ.get("ZEN_VOICE_REF_TEXT") or (
-    "Sit down, if you like. There's no hurry here. The tea is still warm, and the evening is long."
-)
+DATA_DIR = os.environ.get("ZEN_DATA_DIR", os.path.expanduser("~/Library/Application Support/zen"))
+# Who the monk sounds like: every sentence is cloned from a short clip of a voice. The
+# voices that ship are in voice/ (voices.json says what each clip says); more can be added
+# on a Mac as <DATA_DIR>/voices/<id>.wav plus <id>.txt with what the clip says.
+VOICE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice")
+BUNDLED = {v["id"]: (os.path.join(VOICE_DIR, v["id"] + ".wav"), v["text"]) for v in json.load(open(os.path.join(VOICE_DIR, "voices.json")))}
+DEFAULT_VOICE = "elder"
+SEED = 7
+
+
+def ref_for(voice_id: str | None) -> tuple[str, str]:
+    """The clip to clone (and what it says) for a voice id; the default if it's unknown."""
+    if voice_id in BUNDLED:
+        return BUNDLED[voice_id]
+    if voice_id and re.fullmatch(r"[a-z0-9_-]+", voice_id):
+        clip = os.path.join(DATA_DIR, "voices", voice_id)
+        if os.path.exists(clip + ".wav") and os.path.exists(clip + ".txt"):
+            return clip + ".wav", open(clip + ".txt").read().strip()
+    return BUNDLED[DEFAULT_VOICE]
 
 
 def rest_after(text: str) -> float:
@@ -100,9 +110,10 @@ def generate(text: str, **kw) -> np.ndarray:
     return np.concatenate(parts) if parts else np.zeros(0, np.float32)
 
 
-def voice(text: str) -> np.ndarray:
+def voice(text: str, voice_id: str | None = None) -> np.ndarray:
     """One sentence in the monk's voice, with the silence around it trimmed."""
-    pcm = generate(text, ref_audio=REF_AUDIO, ref_text=REF_TEXT)
+    ref_audio, ref_text = ref_for(voice_id)
+    pcm = generate(text, ref_audio=ref_audio, ref_text=ref_text)
     loud = np.flatnonzero(np.abs(pcm) >= 0.006)
     if not loud.size:
         return pcm[:0]
@@ -257,21 +268,21 @@ class Session:
         pcm = np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
         ear.submit(self.hear, pcm)
 
-    def synth(self, gen, chunk_id, text, pause):
+    def synth(self, gen, chunk_id, text, pause, voice_id):
         try:
-            self._synth(gen, chunk_id, text, pause)
+            self._synth(gen, chunk_id, text, pause, voice_id)
         except Exception:  # noqa: BLE001
             log("tts failed:\n" + traceback.format_exc())
             self.send({"type": "spoken", "id": chunk_id})
 
-    def _synth(self, gen, chunk_id, text, pause):
+    def _synth(self, gen, chunk_id, text, pause, voice_id):
         """On the mouth thread: sentence by sentence, so the pauses between them are ours."""
         t0 = time.perf_counter()
         said = sentences(text)
         for i, sentence in enumerate(said):
             if gen != self.generation:
                 return
-            pcm = voice(sentence)
+            pcm = voice(sentence, voice_id)
             if gen != self.generation:
                 return
             words = timings(sentence, pcm)
@@ -294,10 +305,10 @@ class Session:
 
     async def speaker(self):
         while True:
-            gen, chunk_id, text, pause = await self.speak_queue.get()
+            gen, chunk_id, text, pause, voice_id = await self.speak_queue.get()
             if gen != self.generation:
                 continue
-            await asyncio.get_running_loop().run_in_executor(mouth, self.synth, gen, chunk_id, text, pause)
+            await asyncio.get_running_loop().run_in_executor(mouth, self.synth, gen, chunk_id, text, pause, voice_id)
 
     def close(self):
         def shut():
@@ -321,7 +332,7 @@ async def handle(ws):
                 continue
             m = json.loads(msg)
             if m["type"] == "speak":
-                s.speak_queue.put_nowait((s.generation, m["id"], m["text"], float(m.get("pause", 0.6))))
+                s.speak_queue.put_nowait((s.generation, m["id"], m["text"], float(m.get("pause", 0.6)), m.get("voice")))
             elif m["type"] == "commit":
                 ear.submit(s.commit)
             elif m["type"] == "cancel":
