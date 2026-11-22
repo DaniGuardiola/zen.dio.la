@@ -62,8 +62,8 @@ export async function ensureSidecar(status: (s: string) => void = () => {}): Pro
   if (await reachable()) return true;
   if (!child) {
     const py = await python(status);
-    // The first start downloads the voice and hearing models (about 4 GB).
-    status(firstStart() ? "downloading the voice, about 4 GB, first time only" : "waking the voice");
+    // The first start downloads the voice and hearing models (about 5 GB).
+    status(firstStart() ? "downloading the voice, about 5 GB, first time only" : "waking the voice");
     child = spawn(py, [join(SPEECH_DIR, "server.py")], {
       stdio: ["ignore", "pipe", "inherit"],
       env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), ZEN_DATA_DIR: DATA_DIR, TOKENIZERS_PARALLELISM: "false" },
