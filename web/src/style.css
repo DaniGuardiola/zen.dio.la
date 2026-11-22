@@ -178,6 +178,27 @@ button {
   z-index: 2; /* stays clickable over the open panel, to close it */
 }
 
+#full {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  padding: 0.55rem 0.6rem;
+  line-height: 0;
+  color: var(--dim);
+  opacity: 0.6;
+  transition: color 0.4s, opacity 0.4s;
+  z-index: 2;
+}
+
+#full[hidden] {
+  display: none;
+}
+
+#full:hover {
+  color: var(--ink);
+  opacity: 1;
+}
+
 #log-toggle:hover {
   color: var(--ink);
 }
@@ -531,6 +552,13 @@ button.armed {
   top: 50%;
   left: auto;
   right: calc(100% + 4px);
+  transform: translateY(-50%);
+}
+
+[data-tip-at="right"]::after {
+  top: 50%;
+  left: calc(100% + 4px);
+  right: auto;
   transform: translateY(-50%);
 }
 

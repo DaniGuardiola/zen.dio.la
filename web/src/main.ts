@@ -174,6 +174,7 @@ function setup(h: Health) {
     const p: Prefs = { mode: f.get("mode") === "speak" ? "speak" : "write", model: String(f.get("model") ?? "") };
     savePrefs(p);
     audio().resume(); // this click is the gesture that lets the monk be heard
+    goFull(); // ...and that lets the room fill the screen
     connect(p.model);
     if (p.mode === "speak") setVoice(true);
   };
@@ -512,6 +513,19 @@ async function setVoice(on: boolean) {
 micBtn.addEventListener("click", () => setVoice(!voiceOn));
 
 $("log-toggle").addEventListener("click", () => (logEl.hidden = !logEl.hidden));
+
+// Sitting fills the screen. Leaving fullscreen (Esc) leaves a small way back, top left.
+const fullBtn = $("full");
+function goFull() {
+  if (document.fullscreenEnabled && !document.fullscreenElement)
+    document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+}
+function syncFull() {
+  fullBtn.hidden = !document.fullscreenEnabled || !!document.fullscreenElement;
+}
+fullBtn.addEventListener("click", goFull);
+document.addEventListener("fullscreenchange", syncFull);
+syncFull();
 
 function renderLog() {
   linesEl.innerHTML = "";
