@@ -436,6 +436,7 @@ $("say").addEventListener("submit", (e) => {
   transcript.push({ who: "you", text });
   renderLog();
   send({ type: "say", text, heard });
+  if (voiceOn) input.blur(); // back to listening; the box fades away again
 });
 
 /** A button that asks once before doing something that can't be undone. */
@@ -460,6 +461,7 @@ function twoStep(btn: HTMLElement, ask: string, act: () => void) {
 async function setVoice(on: boolean) {
   if (!on) {
     voiceOn = false;
+    document.body.classList.toggle("voice", false);
     stopMic?.();
     stopMic = undefined;
     player.stop();
@@ -468,6 +470,7 @@ async function setVoice(on: boolean) {
     return;
   }
   voiceOn = true;
+  document.body.classList.toggle("voice", true);
   await audio().resume();
   micBtn.dataset.state = "loading";
   // The socket may still be opening right after "sit".
@@ -481,6 +484,7 @@ async function setVoice(on: boolean) {
     });
   } catch (err) {
     voiceOn = false;
+    document.body.classList.toggle("voice", false);
     micBtn.dataset.state = "error";
     youEl.style.opacity = "1";
     youEl.textContent = "the microphone is not available";

@@ -518,3 +518,28 @@ button.armed {
     display: none;
   }
 }
+
+/* Speaking is the way in; writing stays, barely there, until it's wanted. */
+#words::placeholder {
+  color: transparent;
+  font-style: italic;
+  transition: color 0.6s;
+}
+
+body.voice #say {
+  opacity: 0.12;
+  transition: opacity 0.6s ease;
+}
+
+body.voice #say:hover,
+body.voice #say:focus-within {
+  opacity: 1;
+}
+
+body.voice #say:hover #words::placeholder {
+  color: var(--faint);
+}
+
+body.voice #say:focus-within #words::placeholder {
+  color: transparent;
+}
