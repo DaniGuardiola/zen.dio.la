@@ -24,7 +24,5 @@ git clone -q git@github.com:DaniGuardiola/homebrew-tap.git "$tap"
 sed -i '' -e "s|^  url \".*\"|  url \"$url\"|" -e "s|^  sha256 \".*\"|  sha256 \"$sha\"|" "$tap/Formula/zen.rb"
 git -C "$tap" commit -qam "zen $version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && git -C "$tap" push -q
 rm -rf "$tap"
-git commit -qm "packaging: formula at $version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" packaging/zen.rb && git push -q || true
-
-# The page.
-bunx wrangler@4 deploy
+git commit -qm "packaging: formula at $version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" packaging/zen.rb || true
+git push -q
