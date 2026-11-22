@@ -5,7 +5,7 @@ import { mountControls } from "./controls.ts";
 
 /** Companion versions this page can talk to, and the newest one released. */
 const MIN_COMPANION = "0.1.0";
-const LATEST_COMPANION = "0.2.0";
+const LATEST_COMPANION = "0.3.0";
 const DMG = "https://github.com/DaniGuardiola/zen.dio.la/releases/latest/download/zen.dmg";
 // Served by a companion itself (any loopback port, except the Vite dev server)?
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && location.port !== "5173";
@@ -311,11 +311,13 @@ type Msg =
       silence: boolean;
       transcript: typeof transcript;
       checkpoints: number[];
+      seen?: Record<string, string>;
     }
   | { type: "turn"; turn: number }
   | { type: "delta"; turn: number; text: string }
   | { type: "done"; turn: number; text: string; checkpoint?: number }
-  | { type: "glimmer" | "dissolve"; id: string }
+  | { type: "glimmer"; id: string }
+  | { type: "dissolve"; id: string; name: string; plain: string; theirs?: string }
   | { type: "silence" }
   | { type: "voice"; state: "loading" | "on" | "off" | "error"; message?: string }
   | { type: "audio"; id: string; sr: number; pcm: string; words: { w: string; s: number; e: number }[]; text: string }
@@ -331,6 +333,7 @@ function onMessage(m: Msg) {
       if (location.hash === "#sky") return demo(m.sky);
       m.noticed.forEach((id) => sky.glimmer(id, true));
       m.dissolved.forEach((id) => sky.dissolve(id, true));
+      seen = { ...(m.seen ?? {}) };
       if (m.silence) silence(true);
       else document.body.classList.remove("silence");
       transcript = m.transcript;
@@ -367,7 +370,9 @@ function onMessage(m: Msg) {
       break;
     case "dissolve":
       sky.dissolve(m.id);
+      if (m.theirs) seen[m.id] = m.theirs;
       setTimeout(() => bell(), 600);
+      setTimeout(() => showSeen(m.name, m.plain), 1400);
       break;
     case "silence":
       silence();
@@ -546,6 +551,66 @@ function demo(stars: Star[]) {
   order.forEach((id, i) => setTimeout(() => { sky.dissolve(id); bell(0.5); }, 2500 + i * 2200));
   setTimeout(() => silence(), 2500 + order.length * 2200 + 2000);
 }
+
+// --- what the lights mean ---------------------------------------------------
+
+/** The visitor's own words for each light they've earned. */
+let seen: Record<string, string> = {};
+const seenEl = $("seen");
+const card = $("star-card");
+let seenTimer: number | undefined;
+
+/** When a light appears, say in a line what was just seen; it fades after a while. */
+function showSeen(name: string, plain: string) {
+  seenEl.innerHTML = "";
+  const n = document.createElement("span");
+  n.className = "name";
+  n.textContent = name;
+  const p = document.createElement("span");
+  p.textContent = plain;
+  seenEl.append(n, p);
+  seenEl.classList.add("on");
+  clearTimeout(seenTimer);
+  seenTimer = setTimeout(() => seenEl.classList.remove("on"), 11000) as unknown as number;
+}
+
+/** Point at a star to see what it was: the view you held, what you saw, why it matters. */
+function showCard(x: number, y: number) {
+  const hit = sky.starAt(x, y);
+  if (hit && !hit.star.view) return; // an older companion doesn't say what lights mean
+  document.body.style.cursor = hit ? "help" : "";
+  if (!hit) return void (card.hidden = true);
+  const { star, lit, at } = hit;
+  const row = (label: string, text: string) => {
+    const p = document.createElement("p");
+    const l = document.createElement("span");
+    l.className = "label";
+    l.textContent = label;
+    p.append(l, text);
+    return p;
+  };
+  card.innerHTML = "";
+  if (lit) {
+    const h = document.createElement("p");
+    h.className = "name";
+    h.textContent = star.name;
+    card.append(
+      h,
+      row("you held", star.view),
+      row("you saw", seen[star.id] ? `“${seen[star.id]}”` : star.plain),
+      ...(seen[star.id] ? [row("", star.plain)] : []),
+      row("why it matters", star.matters),
+    );
+  } else card.append(row("something you hold", star.view));
+  card.hidden = false;
+  const w = card.offsetWidth;
+  card.style.left = `${Math.min(innerWidth - w - 12, Math.max(12, at[0] - w / 2))}px`;
+  card.style.top = `${at[1] + 22}px`;
+}
+
+$("sky").addEventListener("pointermove", (e) => showCard(e.clientX, e.clientY));
+$("sky").addEventListener("pointerdown", (e) => showCard(e.clientX, e.clientY));
+$("sky").addEventListener("pointerleave", () => (card.hidden = true));
 
 // Step out of the room when the page isn't in front: sound fades, the voice and the
 // words pause, and both pick up where they were on return.

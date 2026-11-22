@@ -38,6 +38,10 @@ export type ViewNode = {
   signs: string[];
   /** The insight, phrased as the student might arrive at it. */
   insight: string;
+  /** The insight in one plain sentence, shown to the visitor with the light ("you saw..."). */
+  plain: string;
+  /** Why it matters for a life: what loosening this view frees you from. */
+  matters: string;
   /** Misreadings the monk must not endorse or create. */
   pitfalls: string[];
   sources: Source[];
@@ -75,6 +79,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "The self is not found on analysis, yet 'I' still works: a name given to a changing collection.",
+    plain: "The self isn't a thing you can find: \"I\" is a name for a changing pattern, and the name still works.",
+    matters: "Much fear, defensiveness and pride comes from guarding a solid \"me\". Seen as a living pattern, there is room to change, to be criticised, to let go.",
     pitfalls: [
       "Do not say the self does not exist at all. Say it does not exist the way it seems to: independently, by its own nature.",
       "Do not replace the small self with a big Self (Atman, cosmic consciousness). That is a different tradition.",
@@ -126,6 +132,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "No watcher stands behind the watching. Seer and seen lean on each other, like two sheaves of reeds.",
+    plain: "No one stands behind experience watching it: the watching and the watched lean on each other.",
+    matters: "It is tempting to retreat into a detached \"pure observer\" and stand outside your own life. Seeing there is no one behind the glass brings you back into it.",
     pitfalls: [
       "This is where Madhyamaka parts ways with Advaita Vedānta and some neo-advaita: awareness is not a self-existing ground.",
       "Do not deny that experience happens. Deny only that it belongs to an independent owner.",
@@ -173,6 +181,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "Whatever depends on other things has no being of its own. That absence of own-being is what 'empty' means.",
+    plain: "Nothing is what it is all by itself: a cup is a cup because of clay, shape, use and the ones who drink.",
+    matters: "We treat things and people as fixed: \"that's just how he is\", \"I'm just like this\". Seeing that everything is made of relations makes it workable and changeable.",
     pitfalls: [
       "Empty does not mean the cup is not there or does not hold tea.",
       "Do not slide into 'it is all in the mind' (idealism). The mind is just as empty as the cup.",
@@ -219,6 +229,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "Nothing arises by its own power from another thing with its own power. There is dependent arising, which is not the production of real things.",
+    plain: "Causes work, but nothing hands its being over to another thing: things arise together, leaning on conditions.",
+    matters: "Blame and guilt often picture one solid cause making one solid result. Seeing a web of conditions softens both, and shows where you can act: on the conditions.",
     pitfalls: [
       "Never say causes do not work. Conventionally they work perfectly; it is their inherent existence that is not found.",
     ],
@@ -260,6 +272,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "Going and goer lean on each other. Motion is real enough to walk home on, and not findable when you look for it.",
+    plain: "Going and goer are defined by each other: change is real enough to live in, and nothing you can pin down.",
+    matters: "We try to freeze moments and hold on to how things were. Seeing change as how things are, not something that happens to fixed things, loosens that grip.",
     pitfalls: [
       "Do not present this as Zeno's paradox or as a proof that motion is impossible.",
     ],
@@ -302,6 +316,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "Empty does not mean nothing. Because things depend on each other, they can work at all. 'Exists' and 'does not exist' are both extremes.",
+    plain: "Empty doesn't mean nothing: things lean on each other, and that is how they work at all. Kindness still lands.",
+    matters: "\"No self, no essence\" can slide into \"nothing matters\": that is despair, not freedom. It is because things depend on each other that what you do matters.",
     pitfalls: [
       "This is the most dangerous misreading. Never let the student leave thinking emptiness means nihilism or that ethics are void.",
     ],
@@ -351,6 +367,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "Two truths, one world. The ultimate is not behind appearances; it is how appearances are.",
+    plain: "There is no truer world hiding behind this one: the deepest truth about the cup is right there in the cup.",
+    matters: "Looking for the \"real\" life somewhere else, behind or after this one, makes us miss this one. The ordinary world is where the truth is.",
     pitfalls: [
       "Do not present conventional truth as falsehood. It is true in its domain.",
       "Do not present the ultimate as a Platonic realm or as Brahman.",
@@ -388,6 +406,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "Emptiness is empty too. It is a medicine for views, not a new view to hold.",
+    plain: "Emptiness isn't a thing either: it's only a way of saying nothing stands alone. Nothing to grab.",
+    matters: "Spiritual ideas easily become new things to cling to and feel superior about. Even \"emptiness\" is a medicine, put down once it has done its work.",
     pitfalls: [
       "Do not describe emptiness as a void, ground, source, or cosmic substance.",
       "Taoist 'wu' and Watts' playful 'Void' language are evocative but not the same claim. Name the difference if it comes up.",
@@ -437,6 +457,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "There is no other shore. The limit of saṃsāra is the limit of nirvāṇa; not a hair's breadth between them.",
+    plain: "There is no other shore to escape to: peace isn't somewhere else, it's the grip loosening here.",
+    matters: "Chasing a perfect state later keeps us restless now. Freedom isn't a place you arrive at; it's the grasping easing wherever you are.",
     pitfalls: [
       "This does not mean 'so practice is pointless' or 'you are already perfect, do nothing'. Confusion still has to be seen through.",
     ],
@@ -478,6 +500,8 @@ export const PATH: ViewNode[] = [
     ],
     insight:
       "The middle way is not a place to stand. It is letting go of standing places.",
+    plain: "The middle way isn't a position to hold: it's not needing to hold one.",
+    matters: "Even the right view, held tightly, becomes another fight. Holding views lightly, you can listen, change your mind and stay kind in disagreement.",
     pitfalls: [
       "Do not say 'all views are equally valid' (relativism). Some views cause suffering; seeing through them is the point.",
     ],
@@ -518,7 +542,16 @@ export function byId(id: string) {
   return PATH.find((n) => n.id === id);
 }
 
-/** Public shape sent to the browser: no teaching notes, only the sky. */
+/** Public shape sent to the browser: the sky, and what each light means. */
 export function sky() {
-  return PATH.map(({ id, name, after, pos, optional }) => ({ id, name, after, pos, optional: !!optional }));
+  return PATH.map(({ id, name, after, pos, optional, view, plain, matters }) => ({
+    id,
+    name,
+    after,
+    pos,
+    optional: !!optional,
+    view,
+    plain,
+    matters,
+  }));
 }

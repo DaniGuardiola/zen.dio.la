@@ -10,6 +10,7 @@ export function notes(id: string) {
     `Consequences (draw out one at a time, from their own words):\n${n.consequences.map((c, i) => `${i + 1}. ${c}`).join("\n")}`,
     `Signs it is truly seen through:\n${n.signs.map((s) => `- ${s}`).join("\n")}`,
     `Insight: ${n.insight}`,
+    `Why it matters (say it in your own words once the insight lands, tied to their life): ${n.matters}`,
     `Pitfalls:\n${n.pitfalls.map((p) => `- ${p}`).join("\n")}`,
     `Sources (paraphrases, cite loosely, never as exact quotes):\n${n.sources.map((s) => `- ${s.ref}: ${s.gist}`).join("\n")}`,
   ].join("\n\n");

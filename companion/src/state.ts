@@ -25,6 +25,7 @@ export type Sitting = {
   sessionId?: string;
   noticed: Record<string, string>; // view id -> their words
   dissolved: Record<string, string>; // view id -> how they saw it
+  seen?: Record<string, string>; // view id -> the insight in the visitor's own words
   order: string[]; // dissolution order, for drawing the path as it was walked
   commitments: string[];
   silence: boolean;

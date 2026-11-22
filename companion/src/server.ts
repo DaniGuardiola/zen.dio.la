@@ -51,6 +51,7 @@ function hello(ws: WS) {
     sky: sky(),
     noticed: Object.keys(sitting.noticed),
     dissolved: sitting.order,
+    seen: sitting.seen ?? {}, // the visitor's own words for each light
     silence: sitting.silence,
     transcript: sitting.transcript,
     // Points the visitor can return to (transcript lengths after a finished reply).

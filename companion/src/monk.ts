@@ -10,7 +10,7 @@ export type MonkEvent =
   | { type: "said"; turn: number } // reply text complete, bookkeeping may follow
   | { type: "done"; turn: number; text: string; checkpoint?: number }
   | { type: "glimmer"; id: string }
-  | { type: "dissolve"; id: string }
+  | { type: "dissolve"; id: string; name: string; plain: string; theirs: string }
   | { type: "silence" }
   | { type: "error"; message: string };
 
@@ -116,19 +116,35 @@ export class Monk {
         ),
         tool(
           "dissolve_view",
-          "The visitor has genuinely seen through this view by their own reasoning (check the signs in the notes).",
-          { view_id: viewId, how_they_saw_it: z.string() },
-          async ({ view_id, how_they_saw_it }) => {
+          "The visitor has genuinely seen through this view and said the insight in their own words (check the signs in the notes).",
+          {
+            view_id: viewId,
+            their_words: z.string().describe("The visitor's own words stating the insight, quoted from their recent messages."),
+            how_they_saw_it: z.string(),
+          },
+          async ({ view_id, their_words, how_they_saw_it }) => {
+            // The light has to be earned in the visitor's own words, not the monk's.
+            const recent = s.transcript.filter((l) => l.who === "you").slice(-4).map((l) => l.text).join(" ");
+            const said = new Set(recent.toLowerCase().match(/[a-z']+/g) ?? []);
+            const quoted = their_words.toLowerCase().match(/[a-z']+/g) ?? [];
+            const found = quoted.filter((w) => said.has(w)).length;
+            if (quoted.length < 4 || found / quoted.length < 0.7)
+              return text(
+                "Not yet: the visitor hasn't put this in their own words. Name the insight plainly, say why it matters, and ask them to say it themselves. " +
+                  DONE,
+              );
             if (!s.dissolved[view_id]) {
               s.order.push(view_id);
-              this.emit({ type: "dissolve", id: view_id });
+              const n = PATH.find((x) => x.id === view_id)!;
+              this.emit({ type: "dissolve", id: view_id, name: n.name, plain: n.plain, theirs: their_words });
             }
             s.dissolved[view_id] = how_they_saw_it;
+            s.seen = { ...s.seen, [view_id]: their_words };
             save(s);
             const left = remaining();
             return text(
               left.length
-                ? `Seen through. Still held somewhere: ${left.join(", ")}. Follow the visitor; do not announce progress. ${DONE}`
+                ? `Seen through. Stay with it: let it land before anything new. Still held somewhere: ${left.join(", ")}. ${DONE}`
                 : "Every view on the path is seen through. When the visitor stops holding even the middle, you may enter_silence.",
             );
           },

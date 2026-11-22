@@ -4,7 +4,16 @@
  * At the end the lights gather into a circle and go out.
  */
 
-export type Star = { id: string; name: string; after: string[]; pos: [number, number]; optional: boolean };
+export type Star = {
+  id: string;
+  name: string;
+  after: string[];
+  pos: [number, number];
+  optional: boolean;
+  view: string; // the view as a visitor holds it
+  plain: string; // what seeing through it means, in a sentence
+  matters: string; // why that matters for a life
+};
 
 type Live = Star & { level: number; target: number; born: number; label: number };
 
@@ -15,6 +24,8 @@ const now = () => performance.now() / 1000;
 export class Sky {
   private ctx: CanvasRenderingContext2D;
   private stars = new Map<string, Live>();
+  /** Where each star was last drawn, for pointing at it. */
+  private drawn = new Map<string, [number, number]>();
   private edges: Edge[] = [];
   private dust: { x: number; y: number; r: number; p: number }[] = [];
   private silenceAt = 0;
@@ -37,6 +48,20 @@ export class Sky {
     this.edges = [];
     this.silenceAt = 0;
     for (const s of list) this.stars.set(s.id, { ...s, level: 0, target: 0, born: 0, label: 0 });
+  }
+
+  /** The visible star under a point (page coordinates), lit ones first. */
+  starAt(x: number, y: number): { star: Star; lit: boolean; at: [number, number] } | undefined {
+    let best: { star: Star; lit: boolean; at: [number, number] } | undefined;
+    let bestD = 24;
+    for (const s of this.stars.values()) {
+      if (s.target <= 0 || this.silenceAt) continue;
+      const at = this.drawn.get(s.id);
+      if (!at) continue;
+      const d = Math.hypot(at[0] - x, at[1] - y) - (s.target === 1 ? 6 : 0);
+      if (d < bestD) (bestD = d), (best = { star: s, lit: s.target === 1, at });
+    }
+    return best;
   }
 
   glimmer(id: string, instant = false) {
@@ -124,6 +149,7 @@ export class Sky {
       pos.set(s.id, [px + (ex - px) * k, py + (ey - py) * k]);
     });
     for (const s of this.stars.values()) if (!pos.has(s.id)) pos.set(s.id, this.place(s.pos));
+    this.drawn = pos;
 
     // Edges: the path as it was walked.
     ctx.lineWidth = 0.6;
