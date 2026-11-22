@@ -34,7 +34,7 @@ class Zen < Formula
         brew services start daniguardiola/tap/zen
 
       The monk speaks through Claude Code: install it and sign in first.
-      Voice models (~1 GB) download the first time you turn voice on.
+      Voice models (~4 GB) download the first time you turn voice on.
     EOS
   end
 

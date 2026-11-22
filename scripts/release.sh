@@ -36,7 +36,7 @@ submit() {
 (cd web && bun run build)
 (cd companion && bun build --compile --minify --target=bun-darwin-arm64 src/server.ts --outfile "../$stage/zen-companion")
 cp -R web/dist "$stage/web"
-cp speech/*.py speech/requirements.txt "$stage/speech/"
+cp -R speech/*.py speech/requirements.txt speech/voice "$stage/speech/"
 # Bun's runtime JITs: it needs these under the hardened runtime.
 sign --identifier la.dio.zen.companion --entitlements macos/companion.entitlements "$stage/zen-companion"
 # A bare executable can't be stapled, but notarizing it records it with Apple.

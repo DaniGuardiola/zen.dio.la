@@ -1,6 +1,6 @@
 """
 zen speech sidecar: local STT (Parakeet Unified, streaming, via transcribe.cpp, with
-Silero VAD) + TTS (Kokoro with word timings).
+Silero VAD) + TTS (Breeze TTS 2 on MLX, cloning the monk's voice from voice/monk.wav, with word timings from a forced aligner).
 
 Talks to the companion over a loopback WebSocket. Never reached by the browser directly.
 
@@ -20,50 +20,44 @@ import asyncio
 import base64
 import json
 import os
-import random
+import unicodedata
 import re
 import sys
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import websockets
 
 PORT = int(os.environ.get("ZEN_SPEECH_PORT", "47471"))
-VOICE = os.environ.get("ZEN_VOICE", "am_onyx")
-SPEED = float(os.environ.get("ZEN_VOICE_SPEED", "0.9"))
 SR = 24000
+TTS_MODEL = "mlx-community/Breeze-TTS-2-mlx-4bit"
+ALIGN_MODEL = "mlx-community/Qwen3-ForcedAligner-0.6B-8bit"
+# Who the monk sounds like: every sentence is cloned from this clip. It was designed once
+# with Breeze from "A mellow middle-aged British man with a rich, resonant voice, playful
+# and wise, a philosopher giving an intimate talk. Relaxed, unhurried, a smile in the voice."
+# (seed 19), and ships as a file so everyone hears the same man.
+REF_AUDIO = os.environ.get("ZEN_VOICE_REF", os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice", "monk.wav"))
+SEED = int(os.environ.get("ZEN_VOICE_SEED", "19"))
+REF_TEXT = os.environ.get("ZEN_VOICE_REF_TEXT") or (
+    "Sit down, if you like. There's no hurry here. The tea is still warm, and the evening is long."
+)
 
 
 def rest_after(text: str) -> float:
-    """Pause after a phrase Kokoro split off inside a chunk."""
+    """Pause after a sentence inside a chunk."""
     t = text.rstrip(" \"')]")
     if t.endswith("?"):
         return 0.5
     if t.endswith((".", "!", "…")):
         return 0.35
-    if t.endswith((",", ";", ":", "—")):
-        return 0.18
-    return 0.0
+    return 0.18
 
 
-def speakable(text: str) -> list[str]:
-    """Split into sentences for pacing, but never hand the voice a tiny one on its own:
-    alone, "Ha." or "Me." comes out garbled ("hog", "mayo"). Short ones ride along."""
-    out, cur = [], ""
-    for s in re.split(r"(?<=[.!?…])\s+", text.strip()):
-        if not s:
-            continue
-        cur = (cur + " " + s).strip()
-        if len(cur.split()) >= 5:
-            out.append(cur)
-            cur = ""
-    if cur:
-        if out and len(cur.split()) < 3:
-            out[-1] += " " + cur
-        else:
-            out.append(cur)
-    return out
+def sentences(text: str) -> list[str]:
+    """One sentence at a time, so the pauses between them are ours, not the model's."""
+    return [x for x in re.split(r"(?<=[.!?…])\s+", text.strip()) if x]
 
 
 def log(*a):
@@ -71,18 +65,92 @@ def log(*a):
 
 
 log("loading models…")
-from kokoro import KPipeline  # noqa: E402
-from lexicon import apply as pronounce  # noqa: E402
+from mlx_audio.tts.utils import load_model  # noqa: E402
+from mlx_audio.stt import load as load_aligner  # noqa: E402
 import transcribe_cpp as tc  # noqa: E402
 from huggingface_hub import hf_hub_download  # noqa: E402
 
 # Native logs: only warnings and errors.
 tc.set_log_callback(lambda level, msg: level in (2, 3) and log(msg.rstrip()))
 
-tts = KPipeline(lang_code="a", repo_id="hexgrad/Kokoro-82M")
-# Warm up so the first real sentence is fast.
-for _ in tts("Hello.", voice=VOICE, speed=SPEED):
-    pass
+# The mouth: the voice model and the aligner, used only on this one thread (MLX likes it that way).
+mouth = ThreadPoolExecutor(max_workers=1)
+
+
+def _load_voice():
+    global tts, aligner
+    tts = load_model(TTS_MODEL)
+    # Cloning re-encodes the reference on every call; it never changes, so encode it once.
+    enc, cache = tts._encode_reference, {}
+
+    def encode(ref):
+        if not isinstance(ref, str):
+            return enc(ref)
+        if ref not in cache:
+            cache[ref] = enc(ref)
+        return cache[ref]
+
+    tts._encode_reference = encode
+    aligner = load_aligner(ALIGN_MODEL)
+    voice("Hello.")  # the first line is slow; pay for it now
+
+
+def generate(text: str, **kw) -> np.ndarray:
+    parts = [np.array(r.audio, dtype=np.float32) for r in tts.generate(text=text, split_pattern=None, seed=SEED, **kw)]
+    return np.concatenate(parts) if parts else np.zeros(0, np.float32)
+
+
+def voice(text: str) -> np.ndarray:
+    """One sentence in the monk's voice, with the silence around it trimmed."""
+    pcm = generate(text, ref_audio=REF_AUDIO, ref_text=REF_TEXT)
+    loud = np.flatnonzero(np.abs(pcm) >= 0.006)
+    if not loud.size:
+        return pcm[:0]
+    start = max(0, int(loud[0] - 0.025 * SR))
+    out = pcm[start : loud[-1] + int(0.06 * SR)].copy()
+    fade = min(int(0.008 * SR), int(loud[0] - start))
+    if fade > 0:
+        out[:fade] *= np.linspace(0, 1, fade, endpoint=False, dtype=np.float32)
+    return out
+
+
+def letters(t: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", t.lower()) if c.isalnum())
+
+
+def timings(text: str, pcm: np.ndarray) -> list[dict]:
+    """When each word of `text` is said. The aligner hears words without punctuation; map
+    them back onto the text as written, so the page can show exactly what was said."""
+    tokens = re.findall(r"\S+\s*", text)
+    dur = len(pcm) / SR
+    try:
+        a16 = np.interp(np.arange(0, len(pcm), SR / 16000), np.arange(len(pcm)), pcm).astype(np.float32)
+        items = [(letters(i.text), float(i.start_time), float(i.end_time)) for i in aligner.generate(audio=a16, text=text, language="English")]
+    except Exception as e:  # noqa: BLE001
+        log(f"align failed: {type(e).__name__}: {e}")
+        items = []
+    words, k, last = [], 0, 0.0
+    for tok in tokens:
+        need, got, s, e = letters(tok), "", None, last
+        while k < len(items) and len(got) < len(need):
+            got += items[k][0]
+            s = items[k][1] if s is None else s
+            e = items[k][2]
+            k += 1
+        if s is None:  # punctuation alone, or the aligner ran out
+            s = last
+        words.append({"w": tok, "s": min(s, dur), "e": min(max(e, s), dur)})
+        last = e
+    if not items:  # spread evenly by length, better than nothing
+        total = sum(len(t) for t in tokens) or 1
+        t = 0.0
+        for w in words:
+            w["s"], t = t, t + dur * len(w["w"]) / total
+            w["e"] = t
+    return words
+
+
+mouth.submit(_load_voice).result()
 
 # The ear: NVIDIA Parakeet Unified streams accurate, punctuated text as the visitor
 # speaks; Silero VAD says when they start and stop. All of it on one thread, in order.
@@ -190,38 +258,34 @@ class Session:
         ear.submit(self.hear, pcm)
 
     def synth(self, gen, chunk_id, text, pause):
-        """Runs in a worker thread. Kokoro yields one result per phrase it splits off."""
+        try:
+            self._synth(gen, chunk_id, text, pause)
+        except Exception:  # noqa: BLE001
+            log("tts failed:\n" + traceback.format_exc())
+            self.send({"type": "spoken", "id": chunk_id})
+
+    def _synth(self, gen, chunk_id, text, pause):
+        """On the mouth thread: sentence by sentence, so the pauses between them are ours."""
         t0 = time.perf_counter()
-        # Sentence by sentence, so the pauses between them are ours, not the model's.
-        results = [
-            r
-            for sentence in speakable(text)
-            # A touch of variation from sentence to sentence, so it doesn't sound read off a page.
-            for r in tts(pronounce(sentence), voice=VOICE, speed=SPEED * random.uniform(0.97, 1.03))
-            if r.audio is not None
-        ]
-        for i, result in enumerate(results):
+        said = sentences(text)
+        for i, sentence in enumerate(said):
             if gen != self.generation:
                 return
-            audio = result.audio
-            audio = audio.numpy() if hasattr(audio, "numpy") else np.asarray(audio)
-            # Unhurried: silence after each phrase, longest at the end of the chunk.
-            rest = pause if i == len(results) - 1 else rest_after(result.graphemes or "")
-            audio = np.concatenate([audio, np.zeros(int(SR * rest), dtype=audio.dtype)])
-            pcm16 = (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
-            words = []
-            for t in result.tokens or []:
-                if t.start_ts is None or t.end_ts is None:
-                    continue
-                words.append({"w": t.text + (t.whitespace or ""), "s": t.start_ts, "e": t.end_ts})
+            pcm = voice(sentence)
+            if gen != self.generation:
+                return
+            words = timings(sentence, pcm)
+            # Unhurried: silence after each sentence, longest at the end of the chunk.
+            rest = pause if i == len(said) - 1 else rest_after(sentence)
+            pcm = np.concatenate([pcm, np.zeros(int(SR * rest), dtype=np.float32)])
             self.send(
                 {
                     "type": "audio",
                     "id": chunk_id,
-                    "sr": 24000,
-                    "pcm": base64.b64encode(pcm16).decode(),
+                    "sr": SR,
+                    "pcm": base64.b64encode((np.clip(pcm, -1, 1) * 32767).astype("<i2").tobytes()).decode(),
                     "words": words,
-                    "text": result.graphemes,
+                    "text": sentence,
                 }
             )
         log(f"tts {chunk_id} {time.perf_counter() - t0:.2f}s: {text[:40]!r}")
@@ -233,7 +297,7 @@ class Session:
             gen, chunk_id, text, pause = await self.speak_queue.get()
             if gen != self.generation:
                 continue
-            await asyncio.to_thread(self.synth, gen, chunk_id, text, pause)
+            await asyncio.get_running_loop().run_in_executor(mouth, self.synth, gen, chunk_id, text, pause)
 
     def close(self):
         def shut():

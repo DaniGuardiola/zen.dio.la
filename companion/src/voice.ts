@@ -8,7 +8,8 @@
  *   - STT "final" -> wait a short grace period for the visitor to continue, then send
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { DATA_DIR } from "./state.ts";
 
@@ -38,18 +39,22 @@ async function python(status: (s: string) => void): Promise<string> {
   if (existsSync(local)) return local;
   const venv = join(DATA_DIR, "speech-venv");
   const py = join(venv, "bin", "python");
-  if (existsSync(join(venv, ".ready"))) return py;
+  // The marker holds the requirements it was built from; new ones mean a fresh build.
+  const want = readFileSync(join(SPEECH_DIR, "requirements.txt"), "utf8");
+  const marker = join(venv, ".ready");
+  if (existsSync(marker) && readFileSync(marker, "utf8") === want) return py;
+  rmSync(venv, { recursive: true, force: true });
   // The app bundles its own uv; Homebrew installs depend on the uv formula.
   const uv = process.env.ZEN_UV ?? Bun.which("uv", { PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` });
   if (!uv) throw new Error("uv is needed for voice: brew install uv");
-  status("installing voice models, first time only");
+  status("installing the voice, first time only");
   const run = async (args: string[]) => {
     const p = Bun.spawn([uv, ...args], { env: { ...process.env, VIRTUAL_ENV: venv }, stdout: "inherit", stderr: "inherit" });
     if ((await p.exited) !== 0) throw new Error(`uv ${args[0]} failed`);
   };
   await run(["venv", "--quiet", "--allow-existing", "--python", "3.12", venv]);
   await run(["pip", "install", "--quiet", "-r", join(SPEECH_DIR, "requirements.txt")]);
-  writeFileSync(join(venv, ".ready"), "");
+  writeFileSync(marker, want);
   return py;
 }
 
@@ -57,19 +62,26 @@ export async function ensureSidecar(status: (s: string) => void = () => {}): Pro
   if (await reachable()) return true;
   if (!child) {
     const py = await python(status);
-    status("waking the voice");
+    // The first start downloads the voice and hearing models (about 4 GB).
+    status(firstStart() ? "downloading the voice, about 4 GB, first time only" : "waking the voice");
     child = spawn(py, [join(SPEECH_DIR, "server.py")], {
       stdio: ["ignore", "pipe", "inherit"],
-      env: { ...process.env, VIRTUAL_ENV: join(py, "..", "..") },
+      env: { ...process.env, VIRTUAL_ENV: join(py, "..", ".."), TOKENIZERS_PARALLELISM: "false" },
     });
     child.on("exit", () => (child = undefined));
   }
-  for (let i = 0; i < 600; i++) {
+  for (let i = 0; i < 2 * 60 * 60; i++) {
     if (await reachable()) return true;
     if (!child) return false;
     await Bun.sleep(500);
   }
   return false;
+}
+
+/** The voice model isn't downloaded yet: this is the first time the voice wakes. */
+function firstStart() {
+  const hub = process.env.HF_HOME ? join(process.env.HF_HOME, "hub") : join(homedir(), ".cache", "huggingface", "hub");
+  return !existsSync(join(hub, "models--mlx-community--Breeze-TTS-2-mlx-4bit"));
 }
 
 async function reachable() {
@@ -246,14 +258,13 @@ export class Voice {
   /** Stream monk text in; speak it sentence by sentence. */
   feed(turn: number, delta: string) {
     this.buffer += delta;
-    // Cut at the first sentence end that leaves a chunk long enough to sound natural
-    // ("Ah." alone is too short to synthesise well, so it rides with what follows).
+    // Every sentence on its own, short ones too.
     const ends = /[.!?…]["')\]]*(\s+)/g;
     let m: RegExpExecArray | null;
     while ((m = ends.exec(this.buffer))) {
       const cut = m.index + m[0].length;
       const chunk = this.buffer.slice(0, m.index + m[0].length - m[1]!.length);
-      if (chunk.trim().length < 12) continue;
+      if (!chunk.trim()) continue;
       this.speak(turn, chunk, pauseAfter(chunk, m[1]!));
       this.buffer = this.buffer.slice(cut);
       ends.lastIndex = 0;

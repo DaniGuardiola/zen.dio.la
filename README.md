@@ -37,8 +37,8 @@ Voice: click the small circle. The first time, the companion starts `speech/serv
 (in `speech/.venv` for a checkout; installs build their own env with `uv`). Headphones
 work best until the native audio path lands (see roadmap).
 
-Settings (env): `ZEN_MODEL` (default `claude-opus-5-5`), `ZEN_VOICE` (Kokoro voice,
-default `am_onyx`), `ZEN_VOICE_SPEED`, `ZEN_PORT`, `ZEN_DATA_DIR`. `ZEN_DEV=1` allows the
+Settings (env): `ZEN_MODEL` (default `claude-opus-5-5`), `ZEN_VOICE_REF` + `ZEN_VOICE_REF_TEXT`
+(a clip to clone the monk's voice from, and what it says), `ZEN_PORT`, `ZEN_DATA_DIR`. `ZEN_DEV=1` allows the
 Vite dev server origin.
 
 ## Layout
@@ -50,7 +50,7 @@ Vite dev server origin.
 | `companion/src/monk.ts` | Claude Agent SDK session (streaming input, no built-in tools, game tools over in-process MCP), interruption handling. |
 | `companion/src/voice.ts` | Turn-taking: duck on speech start, barge-in on real words, echo rejection, grace window, sentence-chunked TTS. |
 | `companion/src/server.ts` | Loopback HTTP + WebSocket, origin allowlist, `/health`, `/update`, serves the page. |
-| `speech/server.py` | Local STT (NVIDIA Parakeet Unified EN 0.6B streaming via transcribe.cpp on Metal, Silero VAD for start/stop) + TTS (Kokoro-82M with per-word timestamps, `lexicon.py` for Sanskrit/Pali names). |
+| `speech/server.py` | Local STT (NVIDIA Parakeet Unified EN 0.6B streaming via transcribe.cpp on Metal, Silero VAD for start/stop) + TTS (Breeze TTS 2 on MLX: every sentence is cloned from `speech/voice/monk.wav`, a voice designed once from a description; word timings from the Qwen3 forced aligner). |
 | `web/` | The page: canvas sky, the monk's words revealed at speaking pace, mic capture, playback that knows which word you heard last. |
 | `packaging/zen.rb`, `scripts/release.sh` | Homebrew formula for `daniguardiola/tap` + signed, notarized release (tarball and `.dmg`). |
 | `macos/` | `zen.app`: a menu bar app that runs the companion (open, open at login, quit), its icon and entitlements. |
@@ -75,7 +75,7 @@ Vite dev server origin.
 ## Interruptions
 
 Text and voice share one mechanism. The monk's reply is revealed at speaking pace (text)
-or played sentence by sentence with Kokoro's per-word timings (voice). When you cut in,
+or played sentence by sentence with per-word timings from the aligner (voice). When you cut in,
 the page knows exactly what reached you, the companion interrupts the Claude turn, and
 your next message arrives as `[interrupted: they heard only "…"] your words`. A cough or
 a single "mm" only ducks the voice; two real words stop it. STT text that matches what
